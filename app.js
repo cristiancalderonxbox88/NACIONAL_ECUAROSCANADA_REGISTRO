@@ -1,741 +1,612 @@
-/* ============================================ */
-/* CONFIGURACIÓN */
-/* ============================================ */
+/* =========================================================================
+   WRC · REGISTRO NACIONAL CALIDAD — v2.0 (Firebase Firestore)
+   Nacional Ecuaroscanada S.A.
+   ========================================================================= */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  collection, doc, getDoc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, writeBatch, serverTimestamp, query, where
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
+/* ---------- 1. CONFIGURACIÓN ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyCDkDvFOHsEJvlbnHLyW2ppwjGLU4V-oAk",
+  authDomain: "nacional-ecuaroscanada.firebaseapp.com",
+  projectId: "nacional-ecuaroscanada",
+  storageBucket: "nacional-ecuaroscanada.firebasestorage.app",
+  messagingSenderId: "625903655491",
+  appId: "1:625903655491:web:3a14bb6babeeff894112f6"
+};
+
 const PIN_ADMIN = "1234";
 
-// 🔗 Reemplaza con la URL de tu Apps Script (la que termina en /exec)
-const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyslIJRHX7cfsY1qwoh2nqx1DUrKht1xVZGjXg38hUfqQYwiSbnbjMZpuo20qWaVWKw/exec";
-const INTERVALO_SYNC = 30000;
+/* ---------- 2. COLUMNAS BASE DEL EXCEL ---------- */
+const BASE_COLS = [
+  "FECHA","PROVEEDOR","ZONA","MESA","CLASIFICADOR","VARIEDAD",
+  "TOTAL DEFECTOS","N° REGISTROS","OBSERVACIONES"
+];
 
-/* ============================================ */
-/* BASE DE DATOS EN MEMORIA */
-/* ============================================ */
-let datosSistema = {
-    proveedores: [
-        "(05) QUIMBIAMBA CACUANGO PEDRO",
-        "(01) ECUAROSCANADA S.A.",
-        "(02) GRACE MESA",
-        "(03) HERNAN CABASCANGO",
-        "(04) ESTACIO CACHIPUENDO NATHALY SILVANA"
-    ],
-    zonas: ["1", "2"],
-    clasificadores: ["JM", "Y", "M", "C", "J", "D", "J-Y-D-JM", "JM-D"],
-    mesas: ["M1 CE", "M2 AM", "M3 VE", "M4 RO", "M5 MO", "M6 NA", "PETALOS"],
-    variedades: [
-        "AMNESIA", "ARTC", "ATMC", "BLSH", "BRIGHTON", "CANDLELIGHT", "CARPE DIEM",
-        "COFFE BREAK", "COLOR", "COTTON XPRESSION", "COUNTRY BLUES", "DARK PINK ROSE",
-        "DEEP PURPLE", "DOZEN ROSE HOT PINK", "DOZEN ROSE LIGHT PINK", "DOZEN ROSE NOVELTY-BI",
-        "ANNA JULIA", "ATHOMIC", "BE SWEET", "BOULEVARD", "CANDY X-PRESSION", "CANDELIGHT",
-        "COTTON X-PRESSIÓN", "COUNTRY BLUE", "ECUA PINK", "ESPERANCE", "EXOTIC BERRY",
-        "EXPLORER", "FREE SPIRIT", "FRUTTETO", "FULL MONTY", "GOTCHA", "HARD ROCK",
-        "HEARTS", "HERMOSA", "HOT EXPLORER", "KAHALA", "LOLA", "LORRAINE", "LUCIANO",
-        "MAGIC TIMES", "MANDALA", "MANDARIN X-PRESSION", "MONDIAL", "MOONSTONE",
-        "NINA", "O`HARA", "OPALA", "PALOMA", "PINK FLOYD", "PINK MONDIAL", "PINK XPRESSION",
-        "PLAYA BLANCA", "POMAROSA", "POWDER PUFF", "PRINCESS CROWN", "QUEENS CROWN",
-        "QUICKSAND", "RED PANTHER", "SHIMMER", "SILANTOI", "SUPER SUN", "WHITE OHARA"
-    ],
-    plagas: [
-        "MALTRATO FOLLAJE", "BOTON MALTRATADO", "MALTRATO POSTCO", "B. ABIERTO",
-        "B. DEFORME", "CLOROTICO", "ROTOS", "TORCIDO", "C. DE GANZO", "TRIPS",
-        "ACAROS", "OIDIO", "BOTRITIS", "AFIDOS", "VELLOSO", "MAL DESYEME",
-        "FITO TOXICIDAD", "DEFIC. DE CALCIO", "TALLOS CORTOS", "P QUEMADOS",
-        "2 CABEZAS O MENOS", "TALLOS DELGADOS", "PÁLIDOS", "B. DESCABEZADO CULTIVO",
-        "INTOXICACIÓN", "SIN FOLLAJE", "GUSANO", "MB", "DIPTEROS", "LEPIDOPTEROS",
-        "COLEOPTEROS", "SEMILLA DE MALEZA", "OTROS"
-    ]
+/* ---------- 3. CATÁLOGOS POR DEFECTO ---------- */
+const DEFAULT_CATALOGOS = {
+  proveedores: [
+    "(05) QUIMBIAMBA CACUANGO PEDRO",
+    "(01) ECUAROSCANADA S.A.",
+    "(02) GRACE MESA",
+    "(03) HERNAN CABASCANGO",
+    "(04) ESTACIO CACHIPUENDO NATHALY SILVANA"
+  ],
+  zonas: ["1","2"],
+  clasificadores: ["JM","Y","M","C","J","D","J-Y-D-JM","JM-D"],
+  mesas: ["M1 CE","M2 AM","M3 VE","M4 RO","M5 MO","M6 NA","PETALOS"],
+  variedades: [
+    "AMNESIA","ARTC","ATMC","BLSH","BRIGHTON","CANDLELIGHT","CARPE DIEM",
+    "COFFE BREAK","COLOR","COTTON XPRESSION","COUNTRY BLUES","DARK PINK ROSE",
+    "DEEP PURPLE","DOZEN ROSE HOT PINK","DOZEN ROSE LIGHT PINK",
+    "DOZEN ROSE NOVELTY-BI","ANNA JULIA","ATHOMIC","BE SWEET","BOULEVARD",
+    "CANDY X-PRESSION","COTTON X-PRESSIÓN","COUNTRY BLUE","ECUA PINK",
+    "ESPERANCE","EXOTIC BERRY","EXPLORER","FREE SPIRIT","FRUTTETO",
+    "FULL MONTY","GOTCHA","HARD ROCK","HEARTS","HERMOSA","HOT EXPLORER",
+    "KAHALA","LOLA","LORRAINE","LUCIANO","MAGIC TIMES","MANDALA",
+    "MANDARIN X-PRESSION","MONDIAL","MOONSTONE","NINA","O`HARA","OPALA",
+    "PALOMA","PINK FLOYD","PINK MONDIAL","PINK XPRESSION","PLAYA BLANCA",
+    "POMAROSA","POWDER PUFF","PRINCESS CROWN","QUEENS CROWN","QUICKSAND",
+    "RED PANTHER","SHIMMER","SILANTOI","SUPER SUN","WHITE OHARA"
+  ],
+  plagas: [
+    "MALTRATO FOLLAJE","BOTON MALTRATADO","MALTRATO POSTCO","B. ABIERTO",
+    "B. DEFORME","CLOROTICO","ROTOS","TORCIDO","C. DE GANZO","TRIPS",
+    "ACAROS","OIDIO","BOTRITIS","AFIDOS","VELLOSO","MAL DESYEME",
+    "FITO TOXICIDAD","DEFIC. DE CALCIO","TALLOS CORTOS","P QUEMADOS",
+    "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
+    "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
+    "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
+  ]
 };
 
-/* ============================================ */
-/* ESTADO GLOBAL */
-/* ============================================ */
-let registrosLocales = [];
-let valorActual = "0";
-let mesaSeleccionada = null;
-let variedadSeleccionada = null;
-let plagaSeleccionada = null;
-let clasificadorSeleccionado = null;
-let indiceEditando = null;
-let pinIngresado = "";
-let adminDesbloqueado = false;
+const CATS = ["proveedores","zonas","clasificadores","mesas","variedades","plagas"];
+const ETIQUETAS_CAT = {
+  proveedores:"Proveedores", zonas:"Zonas", clasificadores:"Clasificadores",
+  mesas:"Mesas", variedades:"Variedades", plagas:"Plagas"
+};
 
-/* ============================================ */
-/* INDEXEDDB */
-/* ============================================ */
-const DB_NAME = 'WRC_RegistroCalidad';
-const DB_VERSION = 3;
-const STORE_TX = 'transacciones';
-const STORE_CONFIG = 'config';
-let db = null;
+/* ---------- 4. INICIALIZACIÓN FIREBASE ---------- */
+const app = initializeApp(firebaseConfig);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+const auth = getAuth(app);
 
-function abrirDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
-        req.onupgradeneeded = (e) => {
-            const d = e.target.result;
-            let store;
-            if (!d.objectStoreNames.contains(STORE_TX)) {
-                store = d.createObjectStore(STORE_TX, { keyPath: 'id', autoIncrement: true });
-            } else {
-                store = e.target.transaction.objectStore(STORE_TX);
-            }
-            if (!store.indexNames.contains('sincronizada')) {
-                store.createIndex('sincronizada', 'sincronizada', { unique: false });
-            }
-            if (!store.indexNames.contains('uuid')) {
-                store.createIndex('uuid', 'uuid', { unique: true });
-            }
-            if (!d.objectStoreNames.contains(STORE_CONFIG)) {
-                d.createObjectStore(STORE_CONFIG, { keyPath: 'clave' });
-            }
-        };
-        req.onsuccess = (e) => { db = e.target.result; resolve(db); };
-        req.onerror = (e) => reject(e.target.error);
-    });
+/* ---------- 5. ESTADO ---------- */
+const state = {
+  fecha: hoyISO(), proveedor:"", zona:"", mesa:"",
+  clasificador:"", variedad:"", plaga:"", cantidad:""
+};
+
+const catalogos = {
+  proveedores:[], zonas:[], clasificadores:[],
+  mesas:[], variedades:[], plagas:[]
+};
+
+let transaccionesCache = [];
+let unsubscribeTrans = null;
+let editandoId = null;
+let adminCat = "variedades";
+let pinValidado = false;
+
+/* ---------- 6. UTILIDADES ---------- */
+function hoyISO(d = new Date()) {
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0,10);
 }
-function dbGuardarTransaccion(tx) {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_TX, 'readwrite');
-        const store = t.objectStore(STORE_TX);
-        const reg = { ...tx, uuid: generarUUID(), sincronizada: false, timestamp: Date.now(), intentos: 0 };
-        const req = store.add(reg);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
-
-function dbActualizarTransaccion(id, datos) {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_TX, 'readwrite');
-        const store = t.objectStore(STORE_TX);
-        const req = store.get(id);
-        req.onsuccess = () => {
-            const r = req.result;
-            if (!r) return reject('No encontrado');
-            Object.assign(r, datos, { sincronizada: false, editada: true });
-            store.put(r);
-            resolve();
-        };
-        req.onerror = () => reject(req.error);
-    });
+function $(id) { return document.getElementById(id); }
+function aviso(msg, tipo = "info", ms = 2600) {
+  const cont = $("toasts");
+  const el = document.createElement("div");
+  el.className = "toast " + tipo;
+  el.textContent = msg;
+  cont.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = "opacity .25s";
+    el.style.opacity = "0";
+    setTimeout(() => el.remove(), 260);
+  }, ms);
 }
+function abrirModal(id)  { $(id).classList.add("abierto"); }
+function cerrarModal(id) { $(id).classList.remove("abierto"); }
 
-function dbEliminarTransaccion(id) {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_TX, 'readwrite');
-        const store = t.objectStore(STORE_TX);
-        const req = store.delete(id);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-    });
-}
+/* ---------- 7. ARRANQUE ---------- */
+(async function iniciar() {
+  try {
+    await signInAnonymously(auth);
+    console.log("[WRC] Auth anónima OK");
+  } catch (e) {
+    console.warn("[WRC] Auth anónima no disponible:", e.code || e.message);
+  }
 
-function dbObtenerTodas() {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_TX, 'readonly');
-        const store = t.objectStore(STORE_TX);
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-    });
-}
+  try { await sembrarSiHaceFalta(); }
+  catch (e) { console.error("[WRC] Error al sembrar catálogos:", e); }
 
-function dbObtenerPendientes() {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_TX, 'readonly');
-        const store = t.objectStore(STORE_TX);
-        const idx = store.index('sincronizada');
-        const req = idx.getAll(false);
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
+  CATS.forEach(escucharCatalogo);
+  escucharTransacciones(state.fecha);
+
+  enlazarEventos();
+  renderTodo();
+  actualizarEstadoRed();
+})();
+
+/* ---------- 8. SEMILLA ---------- */
+async function sembrarSiHaceFalta() {
+  const metaRef = doc(db, "meta", "config");
+  let snap;
+  try { snap = await getDoc(metaRef); }
+  catch (e) { return; }
+  if (snap.exists() && snap.data().seeded) return;
+
+  const batch = writeBatch(db);
+  for (const [coleccion, items] of Object.entries(DEFAULT_CATALOGOS)) {
+    items.forEach((nombre, i) => {
+      batch.set(doc(collection(db, coleccion)), { nombre, orden: i, activo: true });
     });
+  }
+  batch.set(metaRef, { seeded: true, seededAt: serverTimestamp() });
+  await batch.commit();
+  console.log("[WRC] Catálogos iniciales creados en Firestore.");
 }
 
-function dbMarcarSincronizada(id) {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_TX, 'readwrite');
-        const store = t.objectStore(STORE_TX);
-        const req = store.get(id);
-        req.onsuccess = () => {
-            const r = req.result;
-            if (r) { r.sincronizada = true; r.fechaSincronizacion = Date.now(); store.put(r); }
-            resolve();
-        };
-        req.onerror = () => reject(req.error);
-    });
+/* ---------- 9. LISTENERS CATÁLOGOS ---------- */
+function escucharCatalogo(nombre) {
+  onSnapshot(collection(db, nombre),
+    (snap) => {
+      catalogos[nombre] = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) =>
+          (a.orden ?? 9999) - (b.orden ?? 9999) ||
+          String(a.nombre).localeCompare(String(b.nombre), "es")
+        );
+      renderTodo();
+    },
+    (err) => console.error(`[WRC] onSnapshot ${nombre}:`, err.code, err.message)
+  );
 }
 
-function dbGuardarConfig(clave, valor) {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_CONFIG, 'readwrite');
-        const store = t.objectStore(STORE_CONFIG);
-        const req = store.put({ clave, valor });
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function dbObtenerConfig(clave) {
-    return new Promise((resolve, reject) => {
-        const t = db.transaction(STORE_CONFIG, 'readonly');
-        const store = t.objectStore(STORE_CONFIG);
-        const req = store.get(clave);
-        req.onsuccess = () => resolve(req.result ? req.result.valor : null);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function generarUUID() {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = Math.random() * 16 | 0;
-        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-}
-
-/* ============================================ */
-/* SINCRONIZACIÓN CON GOOGLE SHEETS */
-/* ============================================ */
-async function enviarASheets(tx) {
-    if (!URL_APPS_SCRIPT || URL_APPS_SCRIPT.includes('TU_URL')) return false;
-    try {
-        const res = await fetch(URL_APPS_SCRIPT, {
-            method: 'POST',
-            body: JSON.stringify({
-                accion: tx.editada ? 'actualizar' : 'crear',
-                uuid: tx.uuid,
-                fecha: tx.fecha,
-                proveedor: tx.proveedor,
-                zona: tx.zona,
-                mesa: tx.mesa,
-                clasificador: tx.clasificador,
-                variedad: tx.variedad,
-                plaga: tx.plaga_enfermedad,
-                cantidad: tx.cantidad
-            })
+/* ---------- 10. LISTENER TRANSACCIONES ---------- */
+function escucharTransacciones(fecha) {
+  if (unsubscribeTrans) { unsubscribeTrans(); unsubscribeTrans = null; }
+  const q = query(collection(db, "transacciones"), where("fecha","==",fecha));
+  unsubscribeTrans = onSnapshot(q,
+    (snap) => {
+      transaccionesCache = snap.docs
+        .map(d => ({ ...d.data(), id: d.id, pendiente: d.metadata.hasPendingWrites }))
+        .sort((a, b) => {
+          const ta = a.creado?.seconds ?? 0;
+          const tb = b.creado?.seconds ?? 0;
+          return tb - ta;
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const r = await res.json();
-        return r.status === 'ok';
-    } catch (e) {
-        console.error('❌ Error sync:', e);
-        return false;
+      renderTransacciones();
+    },
+    (err) => {
+      console.error("[WRC] onSnapshot transacciones:", err.code, err.message);
+      aviso("Error leyendo transacciones: " + err.message, "error", 4000);
     }
+  );
 }
 
-async function sincronizarPendientes() {
-    if (!navigator.onLine) return;
-    const pend = await dbObtenerPendientes();
-    if (pend.length === 0) return;
-    console.log(`🔄 Sincronizando ${pend.length} pendientes...`);
-    for (const tx of pend) {
-        const ok = await enviarASheets(tx);
-        if (ok) await dbMarcarSincronizada(tx.id);
-        else break;
-    }
-    actualizarIndicadorSync();
-    await recargarRegistrosDesdeDB();
+/* ---------- 11. RENDER ---------- */
+function renderTodo() {
+  renderSelects();
+  renderListas();
+  renderResumen();
+  renderPantalla();
+}
+function renderSelects() {
+  llenarSelect("proveedor", catalogos.proveedores, "TODOS", state.proveedor);
+  llenarSelect("zona", catalogos.zonas, "TODAS", state.zona);
+}
+function llenarSelect(id, items, placeholder, valorActual) {
+  const sel = $(id); if (!sel) return;
+  const previo = valorActual ?? sel.value;
+  sel.innerHTML = "";
+  const opt0 = document.createElement("option");
+  opt0.value = ""; opt0.textContent = placeholder;
+  sel.appendChild(opt0);
+  items.forEach(it => {
+    const o = document.createElement("option");
+    o.value = it.nombre; o.textContent = it.nombre;
+    sel.appendChild(o);
+  });
+  sel.value = previo;
+  if (sel.value !== previo) sel.value = "";
+}
+function renderListas() {
+  renderLista("listaMesas","buscarMesas",catalogos.mesas,state.mesa,(v)=>{
+    state.mesa = (state.mesa === v) ? "" : v;
+    renderListas(); renderResumen();
+  });
+  renderLista("listaClasificadores","buscarClasificadores",catalogos.clasificadores,state.clasificador,(v)=>{
+    state.clasificador = (state.clasificador === v) ? "" : v;
+    renderListas(); renderResumen();
+  });
+  renderLista("listaVariedades","buscarVariedades",catalogos.variedades,state.variedad,(v)=>{
+    state.variedad = (state.variedad === v) ? "" : v;
+    renderListas(); renderResumen();
+  });
+  renderLista("listaPlagas","buscarPlagas",catalogos.plagas,state.plaga,(v)=>{
+    state.plaga = (state.plaga === v) ? "" : v;
+    renderListas(); renderResumen();
+  });
+}
+function renderLista(contId, buscarId, items, seleccionado, onSelect) {
+  const cont = $(contId); if (!cont) return;
+  const input = $(buscarId);
+  const filtro = (input?.value || "").trim().toUpperCase();
+  cont.innerHTML = "";
+  let pintados = 0;
+  items.forEach((it) => {
+    const nombre = it.nombre ?? it;
+    if (filtro && !String(nombre).toUpperCase().includes(filtro)) return;
+    pintados++;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "item" + (seleccionado === nombre ? " activo" : "");
+    b.textContent = nombre;
+    b.addEventListener("click", () => onSelect(nombre));
+    cont.appendChild(b);
+  });
+  if (!pintados) {
+    const p = document.createElement("div");
+    p.className = "vacio";
+    p.textContent = items.length ? "Sin resultados" : "Cargando…";
+    cont.appendChild(p);
+  }
+}
+function renderResumen() {
+  $("rzMesa").textContent = state.mesa || "—";
+  $("rzClasif").textContent = state.clasificador || "—";
+  $("rzVariedad").textContent = state.variedad || "—";
+  $("rzPlaga").textContent = state.plaga || "—";
+}
+function renderPantalla() {
+  $("pantalla").textContent = state.cantidad === "" ? "0" : state.cantidad;
 }
 
-async function actualizarIndicadorSync() {
-    const el = document.getElementById('sync-indicador');
-    if (!el) return;
-    const pend = await dbObtenerPendientes();
-    el.classList.remove('online', 'offline', 'sincronizando');
-    if (!navigator.onLine) {
-        el.classList.add('offline');
-        el.textContent = `🔴 Sin conexión${pend.length ? ' · ' + pend.length : ''}`;
-    } else if (pend.length > 0) {
-        el.classList.add('sincronizando');
-        el.textContent = `🟡 Sincronizando · ${pend.length}`;
+/* ---------- 12. GUARDAR ---------- */
+async function guardar() {
+  if (!state.mesa) return aviso("Selecciona una MESA", "error");
+  if (!state.clasificador) return aviso("Selecciona un CLASIFICADOR", "error");
+  if (!state.variedad) return aviso("Selecciona una VARIEDAD", "error");
+  if (!state.plaga) return aviso("Selecciona una PLAGA", "error");
+  const cant = parseInt(state.cantidad, 10);
+  if (!Number.isFinite(cant) || cant <= 0) return aviso("Ingresa una CANTIDAD", "error");
+
+  const btn = $("btnGuardar");
+  btn.disabled = true;
+  try {
+    await addDoc(collection(db, "transacciones"), {
+      fecha: state.fecha, proveedor: state.proveedor || "", zona: state.zona || "",
+      mesa: state.mesa, clasificador: state.clasificador, variedad: state.variedad,
+      plaga: state.plaga, tallos: cant,
+      usuario: localStorage.getItem("wrc_usuario") || "TABLET",
+      creado: serverTimestamp(), actualizado: serverTimestamp()
+    });
+    state.variedad = ""; state.plaga = ""; state.cantidad = "";
+    renderListas(); renderResumen(); renderPantalla();
+    aviso("✔ Registro guardado", "ok", 1400);
+  } catch (e) {
+    console.error(e);
+    aviso("Error al guardar: " + e.message, "error", 4000);
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- 13. TABLA TRANSACCIONES ---------- */
+function renderTransacciones() {
+  const tbody = $("tablaTrans"); const input = $("buscarTrans");
+  if (!tbody) return;
+  const filtro = (input?.value || "").trim().toUpperCase();
+  const lista = transaccionesCache.filter(t => {
+    if (!filtro) return true;
+    return [t.mesa,t.clasificador,t.variedad,t.plaga,t.usuario]
+      .some(v => String(v || "").toUpperCase().includes(filtro));
+  });
+  $("transFecha").textContent = state.fecha;
+  $("transContador").textContent = `${lista.length} registro${lista.length === 1 ? "" : "s"}`;
+  tbody.innerHTML = "";
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="vacio">Sin transacciones para esta fecha</td></tr>`;
+    return;
+  }
+  lista.forEach(t => {
+    const tr = document.createElement("tr");
+    if (t.pendiente) tr.classList.add("pendiente-row");
+    if (t.id === editandoId) {
+      tr.innerHTML = `
+        <td>${esc(t.fecha)}</td>
+        <td>${esc(t.mesa)}</td>
+        <td>${esc(t.clasificador)}</td>
+        <td><input class="edit-in" data-campo="variedad" value="${esc(t.variedad)}"></td>
+        <td><input class="edit-in" data-campo="plaga" value="${esc(t.plaga)}"></td>
+        <td><input class="edit-in edit-num" type="number" min="1" data-campo="tallos" value="${esc(t.tallos)}"></td>
+        <td>—</td>
+        <td><div class="acciones-celda">
+          <button class="mini ok" data-accion="save" data-id="${t.id}">✓</button>
+          <button class="mini" data-accion="cancel">✕</button>
+        </div></td>`;
     } else {
-        el.classList.add('online');
-        el.textContent = '🟢 En línea';
+      tr.innerHTML = `
+        <td>${esc(t.fecha)}</td>
+        <td><b>${esc(t.mesa)}</b></td>
+        <td>${esc(t.clasificador)}</td>
+        <td>${esc(t.variedad)}</td>
+        <td>${esc(t.plaga)}</td>
+        <td><b>${esc(t.tallos)}</b></td>
+        <td><span class="dot ${t.pendiente ? "pendiente" : "sincronizado"}"></span></td>
+        <td><div class="acciones-celda">
+          <button class="mini" data-accion="edit" data-id="${t.id}">✏️</button>
+          <button class="mini del" data-accion="del" data-id="${t.id}">🗑️</button>
+        </div></td>`;
     }
+    tbody.appendChild(tr);
+  });
+}
+async function manejarAccionTrans(e) {
+  const btn = e.target.closest("button[data-accion]");
+  if (!btn) return;
+  const accion = btn.dataset.accion; const id = btn.dataset.id;
+
+  if (accion === "edit") { editandoId = id; renderTransacciones(); return; }
+  if (accion === "cancel") { editandoId = null; renderTransacciones(); return; }
+
+  if (accion === "del") {
+    if (!confirm("¿Eliminar esta transacción? Esta acción no se puede deshacer.")) return;
+    try { await deleteDoc(doc(db, "transacciones", id)); aviso("Transacción eliminada", "ok", 1600); }
+    catch (err) { aviso("Error al eliminar: " + err.message, "error"); }
+    return;
+  }
+  if (accion === "save") {
+    const tr = btn.closest("tr");
+    const variedad = tr.querySelector('[data-campo="variedad"]').value.trim();
+    const plaga = tr.querySelector('[data-campo="plaga"]').value.trim();
+    const tallos = parseInt(tr.querySelector('[data-campo="tallos"]').value, 10);
+    if (!variedad || !plaga) return aviso("Variedad y plaga son obligatorias", "error");
+    if (!Number.isFinite(tallos) || tallos <= 0) return aviso("Cantidad inválida", "error");
+    try {
+      await updateDoc(doc(db, "transacciones", id), {
+        variedad, plaga, tallos, actualizado: serverTimestamp()
+      });
+      editandoId = null;
+      aviso("✔ Transacción actualizada", "ok", 1600);
+    } catch (err) { aviso("Error al actualizar: " + err.message, "error"); }
+  }
 }
 
-window.addEventListener('online', () => { actualizarIndicadorSync(); sincronizarPendientes(); });
-window.addEventListener('offline', () => actualizarIndicadorSync());
+/* ---------- 14. EXCEL ---------- */
+function exportarExcel() {
+  if (typeof XLSX === "undefined") return aviso("SheetJS no está cargado", "error");
+  if (!transaccionesCache.length) return aviso("No hay transacciones para exportar", "error");
 
-async function recargarRegistrosDesdeDB() {
-    registrosLocales = await dbObtenerTodas();
-}
+  const plagasCols = (catalogos.plagas.length
+    ? catalogos.plagas.map(p => p.nombre)
+    : DEFAULT_CATALOGOS.plagas).slice();
 
-/* ============================================ */
-/* RENDERIZADO */
-/* ============================================ */
-function renderizarSelectores() {
-    document.getElementById('proveedor').innerHTML =
-        datosSistema.proveedores.map(p => `<option value="${p}">${p}</option>`).join('');
-    document.getElementById('zona').innerHTML =
-        datosSistema.zonas.map(z => `<option value="${z}">Zona ${z}</option>`).join('');
-}
+  transaccionesCache.forEach(t => {
+    if (t.plaga && !plagasCols.includes(t.plaga)) plagasCols.push(t.plaga);
+  });
 
-function renderizarListas() {
-    document.getElementById('lista-mesas').innerHTML =
-        datosSistema.mesas.map(m => `<li data-id="${m}">${m}</li>`).join('');
-    document.getElementById('lista-clasificadores').innerHTML =
-        datosSistema.clasificadores.map(c => `<li data-id="${c}">${c}</li>`).join('');
-    document.getElementById('lista-variedades').innerHTML =
-        datosSistema.variedades.map(v => `<li data-id="${v}">${v}</li>`).join('');
-    document.getElementById('lista-plagas').innerHTML =
-        datosSistema.plagas.map(p => `<li data-id="${p}">${p}</li>`).join('');
-}
+  const COLUMNAS = [...BASE_COLS, ...plagasCols];
+  const grupos = new Map();
 
-/* ============================================ */
-/* BUSCADORES */
-/* ============================================ */
-function filtrarLista(idLista, textoBusqueda) {
-    const lista = document.getElementById(idLista);
-    const texto = textoBusqueda.toLowerCase().trim();
-    Array.from(lista.children).forEach(li => {
-        const contenido = li.getAttribute('data-id').toLowerCase();
-        li.style.display = contenido.includes(texto) ? 'flex' : 'none';
+  transaccionesCache.forEach(t => {
+    const key = [t.fecha,t.proveedor,t.zona,t.mesa,t.clasificador,t.variedad].join("¦");
+    if (!grupos.has(key)) {
+      const fila = {
+        FECHA: t.fecha || "", PROVEEDOR: t.proveedor || "", ZONA: t.zona || "",
+        MESA: t.mesa || "", CLASIFICADOR: t.clasificador || "",
+        VARIEDAD: t.variedad || "", OBSERVACIONES: ""
+      };
+      plagasCols.forEach(p => { fila[p] = 0; });
+      fila._registros = 0;
+      grupos.set(key, fila);
+    }
+    const fila = grupos.get(key);
+    const cant = Number(t.tallos) || 0;
+    fila[t.plaga] = (fila[t.plaga] || 0) + cant;
+    fila._registros++;
+  });
+
+  const filas = [];
+  [...grupos.values()]
+    .sort((a, b) =>
+      String(a.MESA).localeCompare(String(b.MESA),"es") ||
+      String(a.VARIEDAD).localeCompare(String(b.VARIEDAD),"es"))
+    .forEach(f => {
+      let total = 0;
+      plagasCols.forEach(p => { total += Number(f[p]) || 0; });
+      f["TOTAL DEFECTOS"] = total;
+      f["N° REGISTROS"] = f._registros;
+      filas.push(COLUMNAS.map(c => f[c] ?? ""));
     });
-}
 
-function toggleBuscador(idBuscador) {
-    const buscador = document.getElementById(idBuscador);
-    buscador.classList.toggle('activo');
-    if (buscador.classList.contains('activo')) {
-        const input = buscador.querySelector('input');
-        input.focus();
-        input.value = '';
-        const idLista = idBuscador.replace('buscador-', 'lista-');
-        filtrarLista(idLista, '');
+  const filaTotal = COLUMNAS.map((c, i) => {
+    if (i < BASE_COLS.length - 2) return i === 0 ? "TOTALES" : "";
+    if (c === "OBSERVACIONES") return "";
+    let suma = 0;
+    filas.forEach(r => { suma += Number(r[i]) || 0; });
+    return suma;
+  });
+
+  const aoa = [COLUMNAS, ...filas, filaTotal];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = COLUMNAS.map((c, i) => {
+    if (i < BASE_COLS.length) {
+      if (c === "FECHA") return { wch: 12 };
+      if (c === "PROVEEDOR") return { wch: 34 };
+      if (c === "VARIEDAD") return { wch: 24 };
+      return { wch: 14 };
     }
+    return { wch: 13 };
+  });
+  ws["!freeze"] = { xSplit: 6, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "CALIDAD");
+  XLSX.writeFile(wb, `Registro_Calidad_${state.fecha}.xlsx`);
+  aviso(`📊 Excel generado (${COLUMNAS.length} columnas)`, "ok", 2600);
 }
 
-/* ============================================ */
-/* TECLADO NUMÉRICO */
-/* ============================================ */
-function presionarTecla(num) {
-    if (valorActual === "0") valorActual = num;
-    else valorActual += num;
-    document.getElementById('pantalla').innerText = valorActual;
+/* ---------- 15. ADMIN ---------- */
+function renderTabsAdmin() {
+  const cont = $("adminTabs"); cont.innerHTML = "";
+  CATS.forEach(cat => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tab" + (adminCat === cat ? " activo" : "");
+    b.textContent = ETIQUETAS_CAT[cat];
+    b.onclick = () => { adminCat = cat; renderTabsAdmin(); renderAdminLista(); };
+    cont.appendChild(b);
+  });
 }
-
-function borrarTodo() {
-    valorActual = "0";
-    document.getElementById('pantalla').innerText = valorActual;
-}
-
-/* ============================================ */
-/* SELECCIÓN DE LISTAS */
-/* ============================================ */
-function configurarLista(idLista, tipo) {
-    document.getElementById(idLista).addEventListener('click', (e) => {
-        if (e.target.tagName === 'LI') {
-            Array.from(e.currentTarget.children).forEach(li => li.classList.remove('active'));
-            e.target.classList.add('active');
-            const valor = e.target.getAttribute('data-id');
-            if (tipo === 'mesa') mesaSeleccionada = valor;
-            if (tipo === 'variedad') variedadSeleccionada = valor;
-            if (tipo === 'plaga') plagaSeleccionada = valor;
-            if (tipo === 'clasificador') clasificadorSeleccionado = valor;
-        }
-    });
-}
-
-/* ============================================ */
-/* INIT */
-/* ============================================ */
-async function init() {
-    await abrirDB();
-
-    // Cargar listas personalizadas guardadas por el admin
-    const listas = ['proveedores', 'zonas', 'clasificadores', 'mesas', 'variedades', 'plagas'];
-    for (const lista of listas) {
-        const guardada = await dbObtenerConfig(`lista_${lista}`);
-        if (guardada && Array.isArray(guardada)) datosSistema[lista] = guardada;
-    }
-
-    await recargarRegistrosDesdeDB();
-
-    renderizarSelectores();
-    renderizarListas();
-    configurarLista('lista-mesas', 'mesa');
-    configurarLista('lista-clasificadores', 'clasificador');
-    configurarLista('lista-variedades', 'variedad');
-    configurarLista('lista-plagas', 'plaga');
-
-    actualizarIndicadorSync();
-    sincronizarPendientes();
-    setInterval(() => sincronizarPendientes(), INTERVALO_SYNC);
-
-    console.log('✅ App iniciada. Registros cargados:', registrosLocales.length);
-}
-init();
-
-/* ============================================ */
-/* MODAL ADMIN - CON PIN */
-/* ============================================ */
-function abrirAdmin() {
-    document.getElementById('modalAdmin').style.display = 'flex';
-    if (adminDesbloqueado) mostrarVistaAdmin();
-    else mostrarVistaPin();
-}
-
-function cerrarAdmin() {
-    document.getElementById('modalAdmin').style.display = 'none';
-    pinIngresado = "";
-    actualizarPinDisplay();
-    document.getElementById('pinError').innerText = "";
-    document.getElementById('adminInput').value = '';
-}
-
-function mostrarVistaPin() {
-    document.getElementById('vistaPin').style.display = 'block';
-    document.getElementById('vistaAdmin').style.display = 'none';
-    pinIngresado = "";
-    actualizarPinDisplay();
-    document.getElementById('pinError').innerText = "";
-}
-
-function mostrarVistaAdmin() {
-    document.getElementById('vistaPin').style.display = 'none';
-    document.getElementById('vistaAdmin').style.display = 'block';
-    actualizarVistaAdmin();
-}
-
-/* ============================================ */
-/* TECLADO DEL PIN */
-/* ============================================ */
-function presionarPin(num) {
-    if (pinIngresado.length >= 4) return;
-    pinIngresado += num;
-    actualizarPinDisplay();
-    document.getElementById('pinError').innerText = "";
-    if (pinIngresado.length === 4) setTimeout(validarPin, 200);
-}
-
-function borrarPin() {
-    pinIngresado = pinIngresado.slice(0, -1);
-    actualizarPinDisplay();
-    document.getElementById('pinError').innerText = "";
-}
-
-function actualizarPinDisplay() {
-    const dots = document.querySelectorAll('#pinDisplay .pin-dot');
-    dots.forEach((dot, index) => {
-        if (index < pinIngresado.length) dot.classList.add('lleno');
-        else dot.classList.remove('lleno');
-    });
-}
-
-function validarPin() {
-    const display = document.getElementById('pinDisplay');
-    if (pinIngresado === PIN_ADMIN) {
-        adminDesbloqueado = true;
-        mostrarVistaAdmin();
-    } else {
-        display.classList.add('error');
-        document.getElementById('pinError').innerText = "❌ PIN incorrecto. Intenta de nuevo.";
-        setTimeout(() => {
-            display.classList.remove('error');
-            pinIngresado = "";
-            actualizarPinDisplay();
-        }, 600);
-    }
-}
-
-/* ============================================ */
-/* ADMIN - AGREGAR Y ELIMINAR */
-/* ============================================ */
-function actualizarVistaAdmin() {
-    const categoria = document.getElementById('adminCategoria').value;
-    const listaActual = datosSistema[categoria];
-    const contenedorLista = document.getElementById('adminListaActual');
-    const placeholders = {
-        proveedores: "Nombre del Proveedor",
-        zonas: "Número de Zona (Ej. 3)",
-        clasificadores: "Código Clasificador (Ej. JM)",
-        mesas: "Nombre de la Mesa (Ej. M7 LP)",
-        variedades: "Nombre de la Variedad"
+function renderAdminLista() {
+  const cont = $("adminLista"); cont.innerHTML = "";
+  const items = catalogos[adminCat] || [];
+  if (!items.length) {
+    cont.innerHTML = `<div class="vacio">Sin elementos en ${ETIQUETAS_CAT[adminCat]}</div>`;
+    return;
+  }
+  items.forEach(it => {
+    const div = document.createElement("div");
+    div.className = "admin-item";
+    div.innerHTML = `<span title="${esc(it.nombre)}">${esc(it.nombre)}</span>
+                     <button type="button" title="Eliminar">🗑️</button>`;
+    div.querySelector("button").onclick = async () => {
+      if (!confirm(`¿Eliminar "${it.nombre}" de ${ETIQUETAS_CAT[adminCat]}?`)) return;
+      try { await deleteDoc(doc(db, adminCat, it.id)); aviso("Elemento eliminado", "ok", 1500); }
+      catch (e) { aviso("Error: " + e.message, "error"); }
     };
-    document.getElementById('adminInput').placeholder = placeholders[categoria] || "Escribe el nombre aquí...";
-
-    if (listaActual.length === 0) {
-        contenedorLista.innerHTML = '<li style="text-align:center;padding:15px;color:#999;font-size:13px;">No hay items en esta categoría.</li>';
-        return;
-    }
-    contenedorLista.innerHTML = listaActual.map((item, index) => `
-        <li class="admin-item">
-            <span class="item-texto">• ${item}</span>
-            <button class="btn-eliminar-item" onclick="eliminarItemAdmin('${categoria}', ${index})" title="Eliminar">🗑️</button>
-        </li>
-    `).join('');
+    cont.appendChild(div);
+  });
 }
-
 async function agregarItemAdmin() {
-    const categoria = document.getElementById('adminCategoria').value;
-    const input = document.getElementById('adminInput');
-    const nuevoValor = input.value.trim();
-    if (nuevoValor === "") { alert("Escribe un valor válido."); return; }
-    if (datosSistema[categoria].includes(nuevoValor)) { alert("Este registro ya existe."); return; }
-
-    datosSistema[categoria].push(nuevoValor);
-    await dbGuardarConfig(`lista_${categoria}`, datosSistema[categoria]);
-    renderizarSelectores();
-    renderizarListas();
-    actualizarVistaAdmin();
-    input.value = '';
+  const input = $("adminNuevo");
+  const nombre = input.value.trim().toUpperCase();
+  if (!nombre) return aviso("Escribe un nombre", "error");
+  const yaExiste = (catalogos[adminCat] || []).some(i => String(i.nombre).toUpperCase() === nombre);
+  if (yaExiste) return aviso("Ya existe ese elemento", "error");
+  const orden = (catalogos[adminCat] || []).length;
+  try {
+    await addDoc(collection(db, adminCat), { nombre, orden, activo: true });
+    input.value = "";
+    aviso(`✔ Agregado a ${ETIQUETAS_CAT[adminCat]}`, "ok", 1500);
+  } catch (e) { aviso("Error al agregar: " + e.message, "error"); }
 }
 
-async function eliminarItemAdmin(categoria, index) {
-    const item = datosSistema[categoria][index];
-    if (!confirm(`¿Eliminar "${item}" de la lista de ${categoria}?`)) return;
-    datosSistema[categoria].splice(index, 1);
-    await dbGuardarConfig(`lista_${categoria}`, datosSistema[categoria]);
-    renderizarSelectores();
-    renderizarListas();
-    actualizarVistaAdmin();
+/* ---------- 16. ESTADO DE RED ---------- */
+function actualizarEstadoRed() {
+  const el = $("estadoRed"); if (!el) return;
+  const online = navigator.onLine;
+  el.classList.toggle("offline", !online);
+  el.textContent = "●";
+  el.title = online ? "En línea" : "Sin conexión — los datos se guardan localmente";
 }
 
-/* ============================================ */
-/* MODAL TRANSACCIONES */
-/* ============================================ */
-function abrirTransacciones() {
-    document.getElementById('modalTransacciones').style.display = 'flex';
-    renderizarTransacciones();
-}
+/* ---------- 17. EVENTOS ---------- */
+function enlazarEventos() {
+  $("fecha").value = state.fecha;
+  $("fecha").addEventListener("change", (e) => {
+    state.fecha = e.target.value || hoyISO();
+    editandoId = null;
+    escucharTransacciones(state.fecha);
+  });
+  $("proveedor").addEventListener("change", (e) => { state.proveedor = e.target.value; });
+  $("zona").addEventListener("change", (e) => { state.zona = e.target.value; });
+  $("btnGuardar").addEventListener("click", guardar);
+  $("btnExcel").addEventListener("click", exportarExcel);
 
-function cerrarTransacciones() {
-    document.getElementById('modalTransacciones').style.display = 'none';
-    if (indiceEditando !== null) cancelarEdicion();
-}
+  $("btnTrans").addEventListener("click", () => {
+    editandoId = null; renderTransacciones(); abrirModal("modalTrans");
+  });
 
-function renderizarTransacciones() {
-    const tbody = document.getElementById('tablaTransaccionesBody');
-    const contador = document.getElementById('contadorTransacciones');
-    contador.innerText = `${registrosLocales.length} registro${registrosLocales.length !== 1 ? 's' : ''}`;
-
-    if (registrosLocales.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="sin-registros">No hay transacciones registradas aún.</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = registrosLocales.map((reg, index) => {
-        const esEditando = indiceEditando === index;
-        let fechaBonita = reg.fecha;
-        if (reg.fecha) {
-            const p = reg.fecha.split('-');
-            if (p.length === 3) fechaBonita = `${p[2]}/${p[1]}/${p[0]}`;
-        }
-        const proveedorCorto = reg.proveedor.replace(/^\(\d+\)\s*/, '').substring(0, 25) + (reg.proveedor.length > 30 ? '...' : '');
-        const syncIcon = reg.sincronizada ? '🟢' : '🟡';
-        return `
-            <tr class="${esEditando ? 'editando' : ''}">
-                <td><strong>${index + 1}</strong></td>
-                <td style="white-space: nowrap;">${fechaBonita}</td>
-                <td title="${reg.proveedor}">${proveedorCorto}</td>
-                <td>${reg.mesa}</td>
-                <td>${reg.clasificador}</td>
-                <td>${reg.variedad}</td>
-                <td>${reg.plaga_enfermedad}</td>
-                <td><strong>${reg.cantidad}</strong> ${syncIcon}</td>
-                <td style="white-space: nowrap;">
-                    <button class="btn-accion btn-editar" onclick="editarTransaccion(${index})" title="Editar">✏️</button>
-                    <button class="btn-accion btn-eliminar" onclick="eliminarTransaccion(${index})" title="Eliminar">🗑️</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-function editarTransaccion(index) {
-    const reg = registrosLocales[index];
-    indiceEditando = index;
-    document.getElementById('modalTransacciones').style.display = 'none';
-
-    mesaSeleccionada = reg.mesa;
-    marcarActivo('lista-mesas', reg.mesa);
-    clasificadorSeleccionado = reg.clasificador;
-    marcarActivo('lista-clasificadores', reg.clasificador);
-    variedadSeleccionada = reg.variedad;
-    marcarActivo('lista-variedades', reg.variedad);
-    plagaSeleccionada = reg.plaga_enfermedad;
-    marcarActivo('lista-plagas', reg.plaga_enfermedad);
-
-    valorActual = String(reg.cantidad);
-    document.getElementById('pantalla').innerText = valorActual;
-
-    const btn = document.querySelector('.btn-guardar-rojo');
-    btn.innerText = "Actualizar";
-    btn.style.backgroundColor = "#ff9800";
-
-    agregarBotonCancelar();
-    window.scrollTo(0, 0);
-}
-
-function marcarActivo(idLista, valor) {
-    const lista = document.getElementById(idLista);
-    Array.from(lista.children).forEach(li => {
-        li.classList.remove('active');
-        if (li.getAttribute('data-id') === valor) li.classList.add('active');
-    });
-}
-
-function agregarBotonCancelar() {
-    if (document.getElementById('btnCancelarEdicion')) return;
-    const btnGuardar = document.querySelector('.btn-guardar-rojo');
-    const btnCancelar = document.createElement('button');
-    btnCancelar.id = 'btnCancelarEdicion';
-    btnCancelar.innerText = "Cancelar";
-    btnCancelar.style.cssText = `background-color: #757575; color: white; border: none; padding: 12px 20px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; margin-left: 10px;`;
-    btnCancelar.onclick = cancelarEdicion;
-    btnGuardar.parentNode.insertBefore(btnCancelar, btnGuardar.nextSibling);
-}
-
-function cancelarEdicion() {
-    indiceEditando = null;
-    const btn = document.querySelector('.btn-guardar-rojo');
-    btn.innerText = "Guardar";
-    btn.style.backgroundColor = "#e74c3c";
-    const btnCancelar = document.getElementById('btnCancelarEdicion');
-    if (btnCancelar) btnCancelar.remove();
-    borrarTodo();
-    mesaSeleccionada = null;
-    variedadSeleccionada = null;
-    plagaSeleccionada = null;
-    clasificadorSeleccionado = null;
-    document.querySelectorAll('.lista-items li').forEach(li => li.classList.remove('active'));
-}
-
-async function eliminarTransaccion(index) {
-    const reg = registrosLocales[index];
-    if (!confirm(`¿Eliminar este registro?\n\nMesa: ${reg.mesa}\nVariedad: ${reg.variedad}\nPlaga: ${reg.plaga_enfermedad}\nCantidad: ${reg.cantidad}`)) return;
-
-    if (reg.id) await dbEliminarTransaccion(reg.id);
-    registrosLocales.splice(index, 1);
-    if (indiceEditando === index) cancelarEdicion();
-    else if (indiceEditando !== null && indiceEditando > index) indiceEditando--;
-    renderizarTransacciones();
-    actualizarIndicadorSync();
-}
-
-/* ============================================ */
-/* CERRAR MODALES AL CLIC FUERA */
-/* ============================================ */
-window.onclick = function(event) {
-    const mAdmin = document.getElementById('modalAdmin');
-    const mTrans = document.getElementById('modalTransacciones');
-    if (event.target === mAdmin) cerrarAdmin();
-    if (event.target === mTrans) cerrarTransacciones();
-};
-
-/* ============================================ */
-/* GUARDAR / ACTUALIZAR */
-/* ============================================ */
-async function guardarRegistro() {
-    if (!mesaSeleccionada || !variedadSeleccionada || !plagaSeleccionada || !clasificadorSeleccionado) {
-        alert("Selecciona Mesa, Clasificador, Variedad y Plaga/Enfermedad.");
-        return;
-    }
-    if (valorActual === "0") { alert("Ingresa una cantidad mayor a 0."); return; }
-
-    const nuevoRegistro = {
-        fecha: document.getElementById('fecha').value,
-        proveedor: document.getElementById('proveedor').value,
-        zona: document.getElementById('zona').value,
-        clasificador: clasificadorSeleccionado,
-        mesa: mesaSeleccionada,
-        variedad: variedadSeleccionada,
-        plaga_enfermedad: plagaSeleccionada,
-        cantidad: parseInt(valorActual)
-    };
-
-    if (indiceEditando !== null) {
-        const regActual = registrosLocales[indiceEditando];
-        if (regActual.id) await dbActualizarTransaccion(regActual.id, nuevoRegistro);
-        registrosLocales[indiceEditando] = { ...regActual, ...nuevoRegistro, sincronizada: false };
-
-        indiceEditando = null;
-        const btn = document.querySelector('.btn-guardar-rojo');
-        btn.innerText = "Guardar";
-        btn.style.backgroundColor = "#e74c3c";
-        const btnCancelar = document.getElementById('btnCancelarEdicion');
-        if (btnCancelar) btnCancelar.remove();
-        alert("✅ Registro actualizado correctamente.");
+  $("btnAdmin").addEventListener("click", () => {
+    if (pinValidado) {
+      renderTabsAdmin(); renderAdminLista(); abrirModal("modalAdmin");
     } else {
-        await dbGuardarTransaccion(nuevoRegistro);
-        await recargarRegistrosDesdeDB();
-
-        const btn = document.querySelector('.btn-guardar-rojo');
-        const textoOriginal = btn.innerText;
-        btn.innerText = "¡Guardado!";
-        btn.style.backgroundColor = "#27ae60";
-        setTimeout(() => {
-            btn.innerText = textoOriginal;
-            btn.style.backgroundColor = "#e74c3c";
-        }, 1000);
+      $("pinInput").value = ""; $("pinError").textContent = "";
+      abrirModal("modalPin");
+      setTimeout(() => $("pinInput").focus(), 120);
     }
+  });
 
-    // Sincronizar en segundo plano
-    if (navigator.onLine) sincronizarPendientes();
-    actualizarIndicadorSync();
+  $("pinOk").addEventListener("click", validarPin);
+  $("pinInput").addEventListener("keydown", (e) => { if (e.key === "Enter") validarPin(); });
 
-    // Limpiar solo Variedad, Plaga y teclado
-    borrarTodo();
-    variedadSeleccionada = null;
-    plagaSeleccionada = null;
-    document.querySelectorAll('#lista-variedades li, #lista-plagas li')
-        .forEach(li => li.classList.remove('active'));
-}
-
-/* ============================================ */
-/* GENERAR EXCEL */
-/* ============================================ */
-function generarExcel() {
-    const fechaSeleccionada = document.getElementById('fecha').value;
-    const proveedorSeleccionado = document.getElementById('proveedor').value;
-    const zonaSeleccionada = document.getElementById('zona').value;
-
-    const registrosFiltrados = registrosLocales.filter(r =>
-        r.fecha === fechaSeleccionada &&
-        r.proveedor === proveedorSeleccionado &&
-        r.zona === zonaSeleccionada
-    );
-
-    if (registrosFiltrados.length === 0) {
-        alert("No hay registros guardados para esta fecha, proveedor y zona.");
-        return;
+  function validarPin() {
+    const val = $("pinInput").value.trim();
+    if (val === PIN_ADMIN) {
+      pinValidado = true;
+      cerrarModal("modalPin");
+      renderTabsAdmin(); renderAdminLista(); abrirModal("modalAdmin");
+    } else {
+      $("pinError").textContent = "PIN incorrecto";
+      $("pinInput").value = ""; $("pinInput").focus();
     }
+  }
 
-    const columnasExcel = [
-        "FECHA", "AÑO", "MES", "SEMANA", "DIA", "ZONA", "VARIEDAD",
-        "MALTRATO FOLLAJE", "BOTON MALTRATADO", "MALTRATO POSTCO", "B. ABIERTO",
-        "B. DEFORME", "CLOROTICO", "ROTOS", "TORCIDO", "C. DE GANZO", "TRIPS",
-        "ACAROS", "OIDIO", "BOTRITIS", "AFIDOS", "VELLOSO", "MAL DESYEME",
-        "FITO TOXICIDAD", "DEFIC. DE CALCIO", "TALLOS CORTOS", "P QUEMADOS",
-        "2 CABEZAS O MENOS", "TALLOS DELGADOS", "PÁLIDOS", "B. DESCABEZADO CULTIVO",
-        "INTOXICACIÓN", "SIN FOLLAJE", "GUSANO", "MB", "DIPTEROS", "LEPIDOPTEROS",
-        "COLEOPTEROS", "SEMILLA DE MALEZA", "OTROS", "TOTAL", "CLASIFICADOR"
-    ];
+  $("adminAgregar").addEventListener("click", agregarItemAdmin);
+  $("adminNuevo").addEventListener("keydown", (e) => { if (e.key === "Enter") agregarItemAdmin(); });
 
-    const datosAgrupados = {};
-    registrosFiltrados.forEach((data) => {
-        const variedad = data.variedad;
-        if (!datosAgrupados[variedad]) {
-            const p = data.fecha.split('-');
-            datosAgrupados[variedad] = {
-                "FECHA": data.fecha, "AÑO": p[0], "MES": p[1], "SEMANA": "40",
-                "DIA": p[2], "ZONA": data.zona, "VARIEDAD": variedad,
-                "CLASIFICADOR": data.clasificador, "TOTAL": 0
-            };
-            columnasExcel.forEach(col => {
-                if (datosAgrupados[variedad][col] === undefined) datosAgrupados[variedad][col] = 0;
-            });
-        }
-        const plaga = data.plaga_enfermedad;
-        if (datosAgrupados[variedad][plaga] !== undefined) datosAgrupados[variedad][plaga] += data.cantidad;
-        else datosAgrupados[variedad]["OTROS"] += data.cantidad;
-        datosAgrupados[variedad]["TOTAL"] += data.cantidad;
+  const uInput = $("usuarioInput");
+  uInput.value = localStorage.getItem("wrc_usuario") || "TABLET";
+  uInput.addEventListener("change", () => {
+    localStorage.setItem("wrc_usuario", uInput.value.trim().toUpperCase() || "TABLET");
+    aviso("Operario actualizado", "ok", 1400);
+  });
+
+  document.querySelectorAll("[data-cerrar]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      cerrarModal(btn.dataset.cerrar);
+      if (btn.dataset.cerrar === "modalPin") $("pinError").textContent = "";
     });
+  });
+  document.querySelectorAll(".overlay").forEach(ov => {
+    ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("abierto"); });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape")
+      document.querySelectorAll(".overlay.abierto").forEach(o => o.classList.remove("abierto"));
+  });
 
-    const dataArray = Object.values(datosAgrupados);
-    const ws = XLSX.utils.json_to_sheet(dataArray, { header: columnasExcel });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Nacional");
-    const nombreArchivo = `NACIONAL_${proveedorSeleccionado.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaSeleccionada}.xlsx`;
-    XLSX.writeFile(wb, nombreArchivo);
+  ["buscarMesas","buscarClasificadores","buscarVariedades","buscarPlagas"]
+    .forEach(id => $(id).addEventListener("input", renderListas));
+  $("buscarTrans").addEventListener("input", renderTransacciones);
+
+  $("teclado").addEventListener("click", (e) => {
+    const tecla = e.target.closest(".tecla"); if (!tecla) return;
+    const v = tecla.dataset.tecla;
+    if (v === "C") state.cantidad = "";
+    else if (v === "B") state.cantidad = state.cantidad.slice(0, -1);
+    else if (state.cantidad.length < 6)
+      state.cantidad = (state.cantidad === "0" ? "" : state.cantidad) + v;
+    renderPantalla();
+  });
+
+  $("tablaTrans").addEventListener("click", manejarAccionTrans);
+
+  window.addEventListener("online", () => { actualizarEstadoRed(); aviso("Conexión restaurada", "ok", 1800); });
+  window.addEventListener("offline", () => { actualizarEstadoRed(); aviso("Sin conexión — modo local", "info", 2400); });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && state.cantidad &&
+        !document.querySelector(".overlay.abierto") &&
+        document.activeElement.tagName !== "INPUT") guardar();
+  });
 }
+
+console.log("%cWRC Registro Nacional Calidad · v2.0 (Firestore)",
+            "color:#1565c0;font-weight:bold;font-size:12px");
