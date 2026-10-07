@@ -561,72 +561,125 @@ window.generarExcel = function() {
   if (typeof XLSX === "undefined") return mostrarToast("Falta SheetJS", "No se cargó la librería.", "error");
   if (!transaccionesCache.length)  return mostrarToast("Sin datos", "No hay transacciones para exportar.", "error");
 
-  const plagasCols = (catalogos.plagas.length
-    ? catalogos.plagas.map(p => p.nombre)
-    : DEFAULT_CATALOGOS.plagas).slice();
+  /* ---------- Orden EXACTO de las 33 plagas ---------- */
+  const PLAGAS_ORDEN = [
+    "MALTRATO FOLLAJE","BOTON MALTRATADO","MALTRATO POSTCO","B. ABIERTO",
+    "B. DEFORME","CLOROTICO","ROTOS","TORCIDO","C. DE GANZO","TRIPS",
+    "ACAROS","OIDIO","BOTRITIS","AFIDOS","VELLOSO","MAL DESYEME",
+    "FITO TOXICIDAD","DEFIC. DE CALCIO","TALLOS CORTOS","P QUEMADOS",
+    "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
+    "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEPIDOPTEROS",
+    "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
+  ];
 
-  transaccionesCache.forEach(t => {
-    if (t.plaga && !plagasCols.includes(t.plaga)) plagasCols.push(t.plaga);
-  });
+  /* ---------- Encabezado EXACTO de 42 columnas ---------- */
+  const COLUMNAS = [
+    "FECHA","AÑO","MES","SEMANA","DIA","ZONA","VARIEDAD",
+    ...PLAGAS_ORDEN,
+    "TOTAL","CLASIFICADOR"
+  ];
 
-  const COLUMNAS = [...BASE_COLS, ...plagasCols];
+  /* ---------- Utilidades de fecha ---------- */
+  function partesFecha(iso) {
+    // iso = "2026-10-07"
+    const [y, m, d] = iso.split("-").map(Number);
+    const fecha = new Date(Date.UTC(y, m - 1, d));
+    // Semana ISO
+    const tmp = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+    const dayNum = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    const semana = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+    // Día en texto
+    const dias = ["DOMINGO","LUNES","MARTES","MIERCOLES","JUEVES","VIERNES","SABADO"];
+    const meses = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO",
+                   "JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+    return {
+      anio: y,
+      mes: meses[m - 1],
+      semana: semana,
+      dia: dias[fecha.getUTCDay()]
+    };
+  }
+
+  /* ---------- Agrupar: 1 fila por FECHA + ZONA + VARIEDAD + CLASIFICADOR ---------- */
   const grupos = new Map();
 
   transaccionesCache.forEach(t => {
-    const key = [t.fecha,t.proveedor,t.zona,t.mesa,t.clasificador,t.variedad].join("¦");
+    const key = [t.fecha, t.zona || "", t.variedad || "", t.clasificador || ""].join("¦");
+
     if (!grupos.has(key)) {
+      const f = partesFecha(t.fecha);
       const fila = {
-        FECHA: t.fecha||"", PROVEEDOR: t.proveedor||"", ZONA: t.zona||"",
-        MESA: t.mesa||"", CLASIFICADOR: t.clasificador||"",
-        VARIEDAD: t.variedad||"", OBSERVACIONES: ""
+        FECHA:         t.fecha || "",
+        "AÑO":         f.anio,
+        MES:           f.mes,
+        SEMANA:        f.semana,
+        DIA:           f.dia,
+        ZONA:          t.zona || "",
+        VARIEDAD:      t.variedad || "",
+        CLASIFICADOR:  t.clasificador || ""
       };
-      plagasCols.forEach(p => { fila[p] = 0; });
-      fila._regs = 0;
+      PLAGAS_ORDEN.forEach(p => { fila[p] = 0; });
       grupos.set(key, fila);
     }
+
     const fila = grupos.get(key);
     const cant = Number(t.tallos) || 0;
-    fila[t.plaga] = (fila[t.plaga] || 0) + cant;
-    fila._regs++;
+    // Plaga fuera de catálogo → va a "OTROS"
+    const plagaKey = PLAGAS_ORDEN.includes(t.plaga) ? t.plaga : "OTROS";
+    fila[plagaKey] = (fila[plagaKey] || 0) + cant;
   });
 
+  /* ---------- Construir filas en el orden exacto de COLUMNAS ---------- */
   const filas = [];
   [...grupos.values()]
-    .sort((a,b) =>
-      String(a.MESA).localeCompare(String(b.MESA),"es") ||
-      String(a.VARIEDAD).localeCompare(String(b.VARIEDAD),"es"))
+    .sort((a, b) =>
+      String(a.FECHA).localeCompare(String(b.FECHA)) ||
+      String(a.ZONA).localeCompare(String(b.ZONA),"es") ||
+      String(a.VARIEDAD).localeCompare(String(b.VARIEDAD),"es") ||
+      String(a.CLASIFICADOR).localeCompare(String(b.CLASIFICADOR),"es"))
     .forEach(f => {
       let total = 0;
-      plagasCols.forEach(p => { total += Number(f[p]) || 0; });
-      f["TOTAL DEFECTOS"] = total;
-      f["N° REGISTROS"] = f._regs;
+      PLAGAS_ORDEN.forEach(p => { total += Number(f[p]) || 0; });
+      f.TOTAL = total;
       filas.push(COLUMNAS.map(c => f[c] ?? ""));
     });
 
-  const filaTotal = COLUMNAS.map((c,i) => {
-    if (i < BASE_COLS.length - 2) return i === 0 ? "TOTALES" : "";
-    if (c === "OBSERVACIONES") return "";
-    let s = 0; filas.forEach(r => { s += Number(r[i]) || 0; });
+  /* ---------- Fila de TOTALES al final ---------- */
+  const filaTotal = COLUMNAS.map((c, i) => {
+    if (i === 0) return "TOTALES";
+    // No sumar columnas de texto que van antes de las plagas
+    if (i <= 6) return "";                         // FECHA..VARIEDAD
+    if (c === "CLASIFICADOR") return "";
+    let s = 0;
+    filas.forEach(r => { s += Number(r[i]) || 0; });
     return s;
   });
 
+  /* ---------- Generar hoja ---------- */
   const ws = XLSX.utils.aoa_to_sheet([COLUMNAS, ...filas, filaTotal]);
-  ws["!cols"] = COLUMNAS.map((c,i) => {
-    if (i < BASE_COLS.length) {
-      if (c === "FECHA") return { wch:12 };
-      if (c === "PROVEEDOR") return { wch:34 };
-      if (c === "VARIEDAD") return { wch:24 };
-      return { wch:14 };
-    }
-    return { wch:13 };
+
+  ws["!cols"] = COLUMNAS.map((c) => {
+    if (c === "FECHA") return { wch: 12 };
+    if (c === "AÑO") return { wch: 7 };
+    if (c === "MES") return { wch: 11 };
+    if (c === "SEMANA") return { wch: 9 };
+    if (c === "DIA") return { wch: 11 };
+    if (c === "ZONA") return { wch: 7 };
+    if (c === "VARIEDAD") return { wch: 24 };
+    if (c === "CLASIFICADOR") return { wch: 14 };
+    if (c === "TOTAL") return { wch: 9 };
+    return { wch: 12 };
   });
+
+  ws["!freeze"] = { xSplit: 7, ySplit: 1 };
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "CALIDAD");
   XLSX.writeFile(wb, `Registro_Calidad_${state.fecha}.xlsx`);
-  mostrarToast("Excel descargado", `${COLUMNAS.length} columnas generadas.`, "ok", 2500);
+  mostrarToast("Excel descargado", `${COLUMNAS.length} columnas · ${filas.length} filas`, "ok", 2500);
 };
-
 /* =========================================================
    INDICADOR DE RED + PENDIENTES
    ========================================================= */
