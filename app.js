@@ -1,6 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
-   v2.2: Excel 42 columnas correctas + Exportar por rango de fechas
+   v2.3: Sin botón 🖨️ + ZONA obligatoria
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -410,10 +410,11 @@ function renderTransacciones() {
 }
 
 /* =========================================================
-   FUNCIONES GLOBALES (llamadas desde HTML)
+   FUNCIONES GLOBALES
    ========================================================= */
 window.guardarRegistro = async function() {
   if (!state.proveedor)    return mostrarToast("Falta Proveedor", "Selecciona un proveedor.", "error");
+  if (!state.zona)         return mostrarToast("Falta Zona", "Selecciona una zona.", "error");
   if (!state.mesa)         return mostrarToast("Falta Mesa", "Selecciona una mesa.", "error");
   if (!state.clasificador) return mostrarToast("Falta Clasificador", "Selecciona un clasificador.", "error");
   if (!state.variedad)     return mostrarToast("Falta Variedad", "Selecciona una variedad.", "error");
@@ -427,7 +428,7 @@ window.guardarRegistro = async function() {
     await addDoc(collection(db, "transacciones"), {
       fecha:        state.fecha,
       proveedor:    state.proveedor,
-      zona:         state.zona || "",
+      zona:         state.zona,
       mesa:         state.mesa,
       clasificador: state.clasificador,
       variedad:     state.variedad,
@@ -720,11 +721,6 @@ function construirExcel(datos, etiquetaArchivo) {
   mostrarToast("Excel descargado", `${COLUMNAS_EXCEL.length} columnas · ${filas.length} filas`, "ok", 2500);
 }
 
-/* ---------- Botón 🖨️ (fecha actual) ---------- */
-window.generarExcel = function() {
-  construirExcel(transaccionesCache, state.fecha);
-};
-
 /* =========================================================
    EXPORTAR POR RANGO DE FECHAS (botón 🗓️ inyectado)
    ========================================================= */
@@ -775,10 +771,6 @@ function inyectarBotonRango() {
   const headerLeft = document.querySelector(".header-left");
   if (!headerLeft || document.getElementById("btn-rango")) return;
 
-  const btnPrint = [...headerLeft.querySelectorAll(".icon-btn")]
-    .find(b => b.textContent.trim() === "🖨️");
-  if (!btnPrint) return;
-
   const btn = document.createElement("button");
   btn.id = "btn-rango";
   btn.className = "icon-btn";
@@ -786,7 +778,7 @@ function inyectarBotonRango() {
   btn.textContent = "🗓️";
   btn.onclick = abrirModalRango;
 
-  btnPrint.parentNode.insertBefore(btn, btnPrint.nextSibling);
+  headerLeft.appendChild(btn);
 }
 
 function abrirModalRango() {
@@ -887,4 +879,4 @@ setInterval(actualizarIndicadorSync, 3000);
 /* =========================================================
    FIN
    ========================================================= */
-console.log("%cWRC Registro · Firebase v2.2","color:#e74c3c;font-weight:bold;font-size:12px");
+console.log("%cWRC Registro · Firebase v2.3","color:#e74c3c;font-weight:bold;font-size:12px");
