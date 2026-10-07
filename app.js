@@ -1,17 +1,19 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
-   v2.1: Proveedor obligatorio + Notificaciones laterales + Indicador pendientes
+   v2.2: Excel 42 columnas correctas + Exportar por rango de fechas
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, getDoc, addDoc, updateDoc, deleteDoc,
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   onSnapshot, writeBatch, serverTimestamp, query, where
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
-/* ---------- CONFIGURACIÓN FIREBASE ---------- */
+/* =========================================================
+   CONFIGURACIÓN FIREBASE
+   ========================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCDkDvFOHsEJvlbnHLyW2ppwjGLU4V-oAk",
   authDomain: "nacional-ecuaroscanada.firebaseapp.com",
@@ -23,11 +25,9 @@ const firebaseConfig = {
 
 const PIN_ADMIN = "1234";
 
-const BASE_COLS = [
-  "FECHA","PROVEEDOR","ZONA","MESA","CLASIFICADOR","VARIEDAD",
-  "TOTAL DEFECTOS","N° REGISTROS","OBSERVACIONES"
-];
-
+/* =========================================================
+   CATÁLOGOS SEMILLA
+   ========================================================= */
 const DEFAULT_CATALOGOS = {
   proveedores: [
     "(05) QUIMBIAMBA CACUANGO PEDRO","(01) ECUAROSCANADA S.A.",
@@ -57,12 +57,10 @@ const DEFAULT_CATALOGOS = {
     "ACAROS","OIDIO","BOTRITIS","AFIDOS","VELLOSO","MAL DESYEME",
     "FITO TOXICIDAD","DEFIC. DE CALCIO","TALLOS CORTOS","P QUEMADOS",
     "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
-    "INTOXICACIÓN","SIN FOLLAGE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
+    "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
     "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
   ]
 };
-// Corrección tipográfica de semilla
-DEFAULT_CATALOGOS.plagas[25] = "SIN FOLLAJE";
 
 const CATS = ["proveedores","zonas","clasificadores","mesas","variedades","plagas"];
 const ETIQUETAS_CAT = {
@@ -70,12 +68,37 @@ const ETIQUETAS_CAT = {
   mesas:"Mesas", variedades:"Variedades", plagas:"Plagas"
 };
 
+/* =========================================================
+   COLUMNAS EXCEL — 42 columnas exactas
+   ========================================================= */
+const PLAGAS_ORDEN = [
+  "MALTRATO FOLLAJE","BOTON MALTRATADO","MALTRATO POSTCO","B. ABIERTO",
+  "B. DEFORME","CLOROTICO","ROTOS","TORCIDO","C. DE GANZO","TRIPS",
+  "ACAROS","OIDIO","BOTRITIS","AFIDOS","VELLOSO","MAL DESYEME",
+  "FITO TOXICIDAD","DEFIC. DE CALCIO","TALLOS CORTOS","P QUEMADOS",
+  "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
+  "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
+  "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
+];
+
+const COLUMNAS_EXCEL = [
+  "FECHA","AÑO","MES","SEMANA","DIA","ZONA","VARIEDAD",
+  ...PLAGAS_ORDEN,
+  "TOTAL","CLASIFICADOR"
+];
+
+/* =========================================================
+   FIREBASE INIT
+   ========================================================= */
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const auth = getAuth(app);
 
+/* =========================================================
+   ESTADO
+   ========================================================= */
 const state = {
   fecha: new Date().toISOString().slice(0,10),
   proveedor: "", zona: "",
@@ -93,6 +116,9 @@ const catalogos = {
 let transaccionesCache = [];
 let unsubscribeTrans = null;
 
+/* =========================================================
+   UTILS
+   ========================================================= */
 function $(id) { return document.getElementById(id); }
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
@@ -100,7 +126,7 @@ function esc(s) {
 }
 
 /* =========================================================
-   NOTIFICACIONES LATERALES PROFESIONALES
+   NOTIFICACIONES LATERALES
    ========================================================= */
 function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
   let cont = document.getElementById("toast-container");
@@ -109,6 +135,7 @@ function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
     cont.id = "toast-container";
     cont.className = "toast-container";
     document.body.appendChild(cont);
+    inyectarEstilosToast();
   }
 
   const iconos = { ok:"✅", error:"⚠️", info:"ℹ️", warn:"⏳" };
@@ -127,6 +154,50 @@ function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
     el.classList.add("saliendo");
     setTimeout(() => el.remove(), 260);
   }, ms);
+}
+
+function inyectarEstilosToast() {
+  if (document.getElementById("estilos-toast")) return;
+  const s = document.createElement("style");
+  s.id = "estilos-toast";
+  s.textContent = `
+    .toast-container {
+      position: fixed; top: 80px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 10px;
+      pointer-events: none; max-width: 340px;
+    }
+    .toast-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px 18px; background: #fff;
+      border-left: 5px solid #1976d2; border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      font-family: 'Segoe UI', sans-serif; color: #333;
+      animation: toastSlideIn 0.3s ease-out;
+      pointer-events: auto; min-width: 280px;
+    }
+    .toast-icono { font-size: 22px; line-height: 1; flex-shrink: 0; }
+    .toast-texto { flex: 1; line-height: 1.35; }
+    .toast-titulo { font-weight: 700; margin-bottom: 2px; font-size: 14px; }
+    .toast-msg { font-size: 12.5px; color: #666; }
+    .toast-item.ok    { border-left-color: #27ae60; }
+    .toast-item.ok    .toast-titulo { color: #27ae60; }
+    .toast-item.error { border-left-color: #e74c3c; }
+    .toast-item.error .toast-titulo { color: #e74c3c; }
+    .toast-item.info  { border-left-color: #1976d2; }
+    .toast-item.info  .toast-titulo { color: #1976d2; }
+    .toast-item.warn  { border-left-color: #f39c12; }
+    .toast-item.warn  .toast-titulo { color: #e67e22; }
+    .toast-item.saliendo { animation: toastSlideOut 0.25s ease-in forwards; }
+    @keyframes toastSlideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+    @keyframes toastSlideOut {
+      from { transform: translateX(0);     opacity: 1; }
+      to   { transform: translateX(120%);  opacity: 0; }
+    }
+  `;
+  document.head.appendChild(s);
 }
 
 /* =========================================================
@@ -155,20 +226,21 @@ function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
   const z = $("zona");      if (z) z.addEventListener("change", e => state.zona      = e.target.value);
 
   actualizarIndicadorSync();
-  window.addEventListener("online",  () => {
+  window.addEventListener("online", () => {
     actualizarIndicadorSync();
     mostrarToast("Conexión restaurada", "Sincronizando datos pendientes…", "ok");
   });
   window.addEventListener("offline", () => {
     actualizarIndicadorSync();
-    mostrarToast("Sin conexión", "Los registros se guardarán localmente y se subirán al reconectar.", "warn", 4500);
+    mostrarToast("Sin conexión", "Los registros se guardarán localmente.", "warn", 4500);
   });
 
+  inyectarBotonRango();
   renderTodo();
 })();
 
 /* =========================================================
-   SEMILLA INICIAL
+   SEMILLA
    ========================================================= */
 async function sembrarSiHaceFalta() {
   const metaRef = doc(db, "meta", "config");
@@ -338,11 +410,10 @@ function renderTransacciones() {
 }
 
 /* =========================================================
-   FUNCIONES GLOBALES
+   FUNCIONES GLOBALES (llamadas desde HTML)
    ========================================================= */
 window.guardarRegistro = async function() {
-  /* ---- VALIDACIONES (Proveedor ahora es obligatorio) ---- */
-  if (!state.proveedor)    return mostrarToast("Falta Proveedor", "Debes seleccionar un proveedor antes de continuar.", "error");
+  if (!state.proveedor)    return mostrarToast("Falta Proveedor", "Selecciona un proveedor.", "error");
   if (!state.mesa)         return mostrarToast("Falta Mesa", "Selecciona una mesa.", "error");
   if (!state.clasificador) return mostrarToast("Falta Clasificador", "Selecciona un clasificador.", "error");
   if (!state.variedad)     return mostrarToast("Falta Variedad", "Selecciona una variedad.", "error");
@@ -367,20 +438,13 @@ window.guardarRegistro = async function() {
       actualizado:  serverTimestamp()
     });
 
-    /* Captura rápida: mesa, clasificador y proveedor se mantienen */
     state.variedad = ""; state.plaga = ""; state.cantidad = "";
     renderListas(); renderPantalla();
 
-    const online = navigator.onLine;
-    if (online) {
-      mostrarToast("Transacción guardada",
-        `${state.mesa} · ${state.variedad || ""} · ${state.plaga || ""}`.trim() ||
-        "Registro enviado a la nube.",
-        "ok");
+    if (navigator.onLine) {
+      mostrarToast("Transacción guardada", `${state.mesa} · ${state.clasificador}`, "ok");
     } else {
-      mostrarToast("Guardado localmente",
-        "Sin conexión. Se subirá automáticamente al reconectar.",
-        "warn", 4200);
+      mostrarToast("Guardado localmente", "Sin conexión. Se subirá al reconectar.", "warn", 4200);
     }
   } catch(e) {
     console.error(e);
@@ -413,6 +477,9 @@ window.borrarTodo = function() {
   renderPantalla();
 };
 
+/* =========================================================
+   MODALES
+   ========================================================= */
 window.abrirAdmin = function() {
   state.pin = "";
   actualizarPinDots();
@@ -436,6 +503,9 @@ window.cerrarTransacciones = function() {
   document.getElementById("modalTransacciones").style.display = "none";
 };
 
+/* =========================================================
+   PIN
+   ========================================================= */
 function actualizarPinDots() {
   const dots = document.querySelectorAll("#pinDisplay .pin-dot");
   dots.forEach((d, i) => d.classList.toggle("lleno", i < state.pin.length));
@@ -471,6 +541,9 @@ window.borrarPin = function() {
   actualizarPinDots();
 };
 
+/* =========================================================
+   ADMIN
+   ========================================================= */
 window.actualizarVistaAdmin = function() {
   const cat = document.getElementById("adminCategoria").value;
   const ul = document.getElementById("adminListaActual");
@@ -521,6 +594,9 @@ window.agregarItemAdmin = async function() {
   } catch(e) { mostrarToast("Error", e.message, "error"); }
 };
 
+/* =========================================================
+   TRANSACCIONES: editar/eliminar
+   ========================================================= */
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-accion]");
   if (!btn) return;
@@ -545,7 +621,7 @@ document.addEventListener("click", async (e) => {
     const variedad = tr.querySelector('[data-campo="variedad"]').value.trim();
     const plaga    = tr.querySelector('[data-campo="plaga"]').value.trim();
     const tallos   = parseInt(tr.querySelector('[data-campo="tallos"]').value, 10);
-    if (!variedad || !plaga) return mostrarToast("Datos incompletos", "Variedad y plaga son obligatorias.", "error");
+    if (!variedad || !plaga) return mostrarToast("Datos incompletos", "Variedad y plaga obligatorias.", "error");
     if (!Number.isFinite(tallos) || tallos <= 0) return mostrarToast("Cantidad inválida", "", "error");
     try {
       await updateDoc(doc(db, "transacciones", id), {
@@ -557,110 +633,74 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-window.generarExcel = function() {
+/* =========================================================
+   EXCEL — 42 columnas exactas
+   ========================================================= */
+function partesFecha(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const fecha = new Date(Date.UTC(y, m - 1, d));
+  const tmp = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+  const dayNum = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  const semana = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  const dias = ["DOMINGO","LUNES","MARTES","MIERCOLES","JUEVES","VIERNES","SABADO"];
+  const meses = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO",
+                 "JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+  return { anio: y, mes: meses[m - 1], semana, dia: dias[fecha.getUTCDay()] };
+}
+
+function construirExcel(datos, etiquetaArchivo) {
   if (typeof XLSX === "undefined") return mostrarToast("Falta SheetJS", "No se cargó la librería.", "error");
-  if (!transaccionesCache.length)  return mostrarToast("Sin datos", "No hay transacciones para exportar.", "error");
+  if (!datos || !datos.length) return mostrarToast("Sin datos", "No hay transacciones para exportar.", "error");
 
-  /* ---------- Orden EXACTO de las 33 plagas ---------- */
-  const PLAGAS_ORDEN = [
-    "MALTRATO FOLLAJE","BOTON MALTRATADO","MALTRATO POSTCO","B. ABIERTO",
-    "B. DEFORME","CLOROTICO","ROTOS","TORCIDO","C. DE GANZO","TRIPS",
-    "ACAROS","OIDIO","BOTRITIS","AFIDOS","VELLOSO","MAL DESYEME",
-    "FITO TOXICIDAD","DEFIC. DE CALCIO","TALLOS CORTOS","P QUEMADOS",
-    "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
-    "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEPIDOPTEROS",
-    "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
-  ];
-
-  /* ---------- Encabezado EXACTO de 42 columnas ---------- */
-  const COLUMNAS = [
-    "FECHA","AÑO","MES","SEMANA","DIA","ZONA","VARIEDAD",
-    ...PLAGAS_ORDEN,
-    "TOTAL","CLASIFICADOR"
-  ];
-
-  /* ---------- Utilidades de fecha ---------- */
-  function partesFecha(iso) {
-    // iso = "2026-10-07"
-    const [y, m, d] = iso.split("-").map(Number);
-    const fecha = new Date(Date.UTC(y, m - 1, d));
-    // Semana ISO
-    const tmp = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
-    const dayNum = tmp.getUTCDay() || 7;
-    tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-    const semana = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
-    // Día en texto
-    const dias = ["DOMINGO","LUNES","MARTES","MIERCOLES","JUEVES","VIERNES","SABADO"];
-    const meses = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO",
-                   "JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
-    return {
-      anio: y,
-      mes: meses[m - 1],
-      semana: semana,
-      dia: dias[fecha.getUTCDay()]
-    };
-  }
-
-  /* ---------- Agrupar: 1 fila por FECHA + ZONA + VARIEDAD + CLASIFICADOR ---------- */
   const grupos = new Map();
 
-  transaccionesCache.forEach(t => {
+  datos.forEach(t => {
     const key = [t.fecha, t.zona || "", t.variedad || "", t.clasificador || ""].join("¦");
-
     if (!grupos.has(key)) {
       const f = partesFecha(t.fecha);
       const fila = {
-        FECHA:         t.fecha || "",
-        "AÑO":         f.anio,
-        MES:           f.mes,
-        SEMANA:        f.semana,
-        DIA:           f.dia,
-        ZONA:          t.zona || "",
-        VARIEDAD:      t.variedad || "",
-        CLASIFICADOR:  t.clasificador || ""
+        FECHA: t.fecha || "",
+        "AÑO": f.anio, MES: f.mes, SEMANA: f.semana, DIA: f.dia,
+        ZONA: t.zona || "",
+        VARIEDAD: t.variedad || "",
+        CLASIFICADOR: t.clasificador || ""
       };
       PLAGAS_ORDEN.forEach(p => { fila[p] = 0; });
       grupos.set(key, fila);
     }
-
     const fila = grupos.get(key);
     const cant = Number(t.tallos) || 0;
-    // Plaga fuera de catálogo → va a "OTROS"
     const plagaKey = PLAGAS_ORDEN.includes(t.plaga) ? t.plaga : "OTROS";
     fila[plagaKey] = (fila[plagaKey] || 0) + cant;
   });
 
-  /* ---------- Construir filas en el orden exacto de COLUMNAS ---------- */
   const filas = [];
   [...grupos.values()]
     .sort((a, b) =>
       String(a.FECHA).localeCompare(String(b.FECHA)) ||
-      String(a.ZONA).localeCompare(String(b.ZONA),"es") ||
-      String(a.VARIEDAD).localeCompare(String(b.VARIEDAD),"es") ||
-      String(a.CLASIFICADOR).localeCompare(String(b.CLASIFICADOR),"es"))
+      String(a.ZONA).localeCompare(String(b.ZONA), "es") ||
+      String(a.VARIEDAD).localeCompare(String(b.VARIEDAD), "es") ||
+      String(a.CLASIFICADOR).localeCompare(String(b.CLASIFICADOR), "es"))
     .forEach(f => {
       let total = 0;
       PLAGAS_ORDEN.forEach(p => { total += Number(f[p]) || 0; });
       f.TOTAL = total;
-      filas.push(COLUMNAS.map(c => f[c] ?? ""));
+      filas.push(COLUMNAS_EXCEL.map(c => f[c] ?? ""));
     });
 
-  /* ---------- Fila de TOTALES al final ---------- */
-  const filaTotal = COLUMNAS.map((c, i) => {
+  const filaTotal = COLUMNAS_EXCEL.map((c, i) => {
     if (i === 0) return "TOTALES";
-    // No sumar columnas de texto que van antes de las plagas
-    if (i <= 6) return "";                         // FECHA..VARIEDAD
+    if (i <= 6) return "";
     if (c === "CLASIFICADOR") return "";
     let s = 0;
     filas.forEach(r => { s += Number(r[i]) || 0; });
     return s;
   });
 
-  /* ---------- Generar hoja ---------- */
-  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS, ...filas, filaTotal]);
-
-  ws["!cols"] = COLUMNAS.map((c) => {
+  const ws = XLSX.utils.aoa_to_sheet([COLUMNAS_EXCEL, ...filas, filaTotal]);
+  ws["!cols"] = COLUMNAS_EXCEL.map((c) => {
     if (c === "FECHA") return { wch: 12 };
     if (c === "AÑO") return { wch: 7 };
     if (c === "MES") return { wch: 11 };
@@ -672,16 +712,155 @@ window.generarExcel = function() {
     if (c === "TOTAL") return { wch: 9 };
     return { wch: 12 };
   });
-
   ws["!freeze"] = { xSplit: 7, ySplit: 1 };
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "CALIDAD");
-  XLSX.writeFile(wb, `Registro_Calidad_${state.fecha}.xlsx`);
-  mostrarToast("Excel descargado", `${COLUMNAS.length} columnas · ${filas.length} filas`, "ok", 2500);
+  XLSX.writeFile(wb, `Registro_Calidad_${etiquetaArchivo}.xlsx`);
+  mostrarToast("Excel descargado", `${COLUMNAS_EXCEL.length} columnas · ${filas.length} filas`, "ok", 2500);
+}
+
+/* ---------- Botón 🖨️ (fecha actual) ---------- */
+window.generarExcel = function() {
+  construirExcel(transaccionesCache, state.fecha);
 };
+
 /* =========================================================
-   INDICADOR DE RED + PENDIENTES
+   EXPORTAR POR RANGO DE FECHAS (botón 🗓️ inyectado)
+   ========================================================= */
+function inyectarEstilosRango() {
+  if (document.getElementById("estilos-rango")) return;
+  const s = document.createElement("style");
+  s.id = "estilos-rango";
+  s.textContent = `
+    .rango-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; padding: 20px;
+    }
+    .rango-modal {
+      background: #fff; border-radius: 10px; padding: 24px;
+      width: 380px; max-width: 100%; font-family: 'Segoe UI', sans-serif;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    .rango-modal h3 { margin: 0 0 18px; font-size: 17px; color: #333; }
+    .rango-campo { margin-bottom: 14px; }
+    .rango-campo label {
+      display: block; font-size: 11px; font-weight: 700;
+      color: #666; margin-bottom: 4px; letter-spacing: 0.04em;
+    }
+    .rango-campo input {
+      width: 100%; padding: 11px; border: 1px solid #ccc;
+      border-radius: 6px; font-size: 15px; font-family: inherit;
+      box-sizing: border-box;
+    }
+    .rango-campo input:focus { outline: none; border-color: #1976d2; }
+    .rango-botones {
+      display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;
+    }
+    .rango-btn {
+      padding: 10px 20px; border-radius: 6px; border: none;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      font-family: inherit;
+    }
+    .rango-btn-cancelar { background: #e0e0e0; color: #333; }
+    .rango-btn-cancelar:hover { background: #d0d0d0; }
+    .rango-btn-exportar { background: #1976d2; color: #fff; }
+    .rango-btn-exportar:hover { background: #115293; }
+  `;
+  document.head.appendChild(s);
+}
+
+function inyectarBotonRango() {
+  const headerLeft = document.querySelector(".header-left");
+  if (!headerLeft || document.getElementById("btn-rango")) return;
+
+  const btnPrint = [...headerLeft.querySelectorAll(".icon-btn")]
+    .find(b => b.textContent.trim() === "🖨️");
+  if (!btnPrint) return;
+
+  const btn = document.createElement("button");
+  btn.id = "btn-rango";
+  btn.className = "icon-btn";
+  btn.title = "Exportar por rango de fechas";
+  btn.textContent = "🗓️";
+  btn.onclick = abrirModalRango;
+
+  btnPrint.parentNode.insertBefore(btn, btnPrint.nextSibling);
+}
+
+function abrirModalRango() {
+  inyectarEstilosRango();
+  if (document.getElementById("rango-overlay")) return;
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const hace7 = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+
+  const overlay = document.createElement("div");
+  overlay.id = "rango-overlay";
+  overlay.className = "rango-overlay";
+  overlay.innerHTML = `
+    <div class="rango-modal">
+      <h3>📅 Exportar rango de fechas</h3>
+      <div class="rango-campo">
+        <label>DESDE</label>
+        <input type="date" id="rango-desde" value="${hace7}">
+      </div>
+      <div class="rango-campo">
+        <label>HASTA</label>
+        <input type="date" id="rango-hasta" value="${hoy}">
+      </div>
+      <div class="rango-botones">
+        <button class="rango-btn rango-btn-cancelar" id="rango-cancelar">Cancelar</button>
+        <button class="rango-btn rango-btn-exportar" id="rango-exportar">Exportar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.getElementById("rango-cancelar").onclick = () => overlay.remove();
+  document.getElementById("rango-exportar").onclick = async () => {
+    const desde = document.getElementById("rango-desde").value;
+    const hasta = document.getElementById("rango-hasta").value;
+
+    if (!desde || !hasta)
+      return mostrarToast("Faltan fechas", "Selecciona DESDE y HASTA.", "error");
+    if (desde > hasta)
+      return mostrarToast("Rango inválido", "DESDE no puede ser mayor que HASTA.", "error");
+
+    overlay.remove();
+    await exportarRango(desde, hasta);
+  };
+}
+
+async function exportarRango(desde, hasta) {
+  try {
+    mostrarToast("Consultando…", `Trayendo datos de ${desde} a ${hasta}`, "info", 2000);
+
+    const q = query(
+      collection(db, "transacciones"),
+      where("fecha", ">=", desde),
+      where("fecha", "<=", hasta)
+    );
+    const snap = await getDocs(q);
+    const datos = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+    if (!datos.length) {
+      return mostrarToast("Sin datos", "No hay transacciones en ese rango.", "warn", 3000);
+    }
+
+    datos.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+    construirExcel(datos, `${desde}_a_${hasta}`);
+  } catch (e) {
+    console.error(e);
+    mostrarToast("Error", e.message, "error");
+  }
+}
+
+/* =========================================================
+   INDICADOR DE RED
    ========================================================= */
 function actualizarIndicadorSync() {
   const el = document.getElementById("sync-indicador");
@@ -703,7 +882,9 @@ function actualizarIndicadorSync() {
   }
 }
 
-/* Actualizar el indicador cada 3 segundos por si cambian pendientes */
 setInterval(actualizarIndicadorSync, 3000);
 
-console.log("%cWRC Registro · Firebase v2.1","color:#e74c3c;font-weight:bold;font-size:12px");
+/* =========================================================
+   FIN
+   ========================================================= */
+console.log("%cWRC Registro · Firebase v2.2","color:#e74c3c;font-weight:bold;font-size:12px");
