@@ -1,6 +1,6 @@
 // ============================================================
 // REGISTRO NACIONAL CALIDAD - World Roses Center / Ecuaroscanada
-// app.js - Versión con modo offline + sincronización Google Sheets
+// app.js - Versión completa con IndexedDB + Google Sheets
 // ============================================================
 
 // ============================================================
@@ -8,7 +8,7 @@
 // ============================================================
 const PIN_ADMIN = "1234";
 const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyslIJRHX7cfsY1qwoh2nqx1DUrKht1xVZGjXg38hUfqQYwiSbnbjMZpuo20qWaVWKw/exec";
-const INTERVALO_SYNC = 30000; // 30 segundos
+const INTERVALO_SYNC = 30000;
 
 // ============================================================
 // 📋 DATOS PRECARGADOS
@@ -210,7 +210,7 @@ function actualizarTransaccionLocal(id, datos) {
             const r = req.result;
             if (!r) return reject('No encontrado');
             Object.assign(r, datos, {
-                sincronizada: false, // forzar re-sync
+                sincronizada: false,
                 editada: true,
                 fechaEdicion: Date.now()
             });
@@ -245,7 +245,7 @@ function obtenerConfig(clave) {
 // 🔑 UTILIDADES
 // ============================================================
 function generarUUID() {
-    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -264,7 +264,6 @@ async function enviarASheets(tx) {
     try {
         const response = await fetch(URL_APPS_SCRIPT, {
             method: 'POST',
-            // No poner Content-Type: application/json (evita CORS preflight)
             body: JSON.stringify({
                 accion: tx.editada ? 'actualizar' : 'crear',
                 uuid: tx.uuid,
@@ -304,7 +303,6 @@ async function sincronizarPendientes() {
             await marcarSincronizada(tx.id);
         } else {
             await incrementarIntentos(tx.id);
-            // Si acumula 5 intentos fallidos, detener para no saturar
             if ((tx.intentos || 0) + 1 >= 5) break;
         }
     }
@@ -348,7 +346,6 @@ async function actualizarIndicadorSync() {
     }
 }
 
-// Eventos de red
 window.addEventListener('online', () => {
     console.log('🌐 Conexión restaurada');
     actualizarIndicadorSync();
@@ -375,7 +372,6 @@ function renderizarLista(contenedorId, items, tipo, filtro = '') {
             btn.className = 'item-btn';
             btn.textContent = item;
 
-            // Marcar seleccionado
             if (estado.seleccion[tipo] === item) {
                 btn.classList.add('seleccionado');
             }
@@ -401,7 +397,6 @@ function renderizarTodasLasListas() {
     renderizarLista('lista-variedades', estado.variedades, 'variedad', filtros.variedades);
     renderizarLista('lista-plagas', PLAGAS, 'plaga', filtros.plagas);
 
-    // Actualizar display del numpad
     const display = document.getElementById('display-cantidad');
     if (display) display.textContent = estado.seleccion.cantidad || '0';
 }
@@ -461,25 +456,22 @@ async function guardarTransaccion() {
 
     try {
         if (estado.editandoId !== null) {
-            // MODO EDICIÓN
             await actualizarTransaccionLocal(estado.editandoId, transaccion);
             estado.editandoId = null;
             cambiarBotonGuardar(false);
             console.log('✏️ Transacción actualizada');
         } else {
-            // MODO CREACIÓN
             const id = await guardarTransaccionLocal(transaccion);
             console.log('💾 Guardado local con ID:', id);
         }
 
-        // Intentar sync inmediato
         if (navigator.onLine) {
             sincronizarPendientes();
         }
 
         actualizarIndicadorSync();
 
-        // Limpiar SOLO variedad, plaga y cantidad (mantener mesa y clasificador)
+        // Limpiar solo variedad, plaga y cantidad
         s.variedad = '';
         s.plaga = '';
         s.cantidad = '';
@@ -725,7 +717,6 @@ async function descargarExcel() {
         return;
     }
 
-    // Filtrar por proveedor y fecha seleccionados
     const s = estado.seleccion;
     const filtradas = todas.filter(t =>
         (!s.proveedor || t.proveedor === s.proveedor) &&
@@ -737,11 +728,9 @@ async function descargarExcel() {
         return;
     }
 
-    // Cabeceras: FECHA, AÑO, MES, SEMANA, DIA, ZONA, VARIEDAD, + 33 plagas + TOTAL + CLASIFICADOR
     const cabeceras = ['FECHA', 'AÑO', 'MES', 'SEMANA', 'DIA', 'ZONA', 'VARIEDAD',
         ...PLAGAS, 'TOTAL', 'CLASIFICADOR'];
 
-    // Agrupar por variedad
     const agrupado = {};
     filtradas.forEach(t => {
         const key = `${t.variedad}|${t.zona}|${t.clasificador}`;
@@ -796,7 +785,7 @@ function getSemanaISO(fecha) {
 }
 
 // ============================================================
-// 🎛️ INICIALIZACIÓN DE EVENTOS PRINCIPALES
+// 🎛️ INICIALIZACIÓN DE EVENTOS
 // ============================================================
 function inicializarCabecera() {
     const fechaInput = document.getElementById('input-fecha');
@@ -810,6 +799,8 @@ function inicializarCabecera() {
         });
     }
     if (proveedorSel) {
+        // Limpiar primero para evitar duplicados
+        proveedorSel.innerHTML = '<option value="">-- Seleccionar --</option>';
         estado.proveedores.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p;
@@ -821,6 +812,7 @@ function inicializarCabecera() {
         });
     }
     if (zonaSel) {
+        zonaSel.innerHTML = '<option value="">--</option>';
         estado.zonas.forEach(z => {
             const opt = document.createElement('option');
             opt.value = z;
@@ -847,7 +839,6 @@ function inicializarBuscadores() {
         }
     });
 
-    // Lupas
     document.querySelectorAll('.lupa').forEach(lupa => {
         lupa.addEventListener('click', () => {
             const target = document.getElementById(lupa.dataset.target);
@@ -874,7 +865,6 @@ async function inicializar() {
     try {
         await abrirDB();
 
-        // Cargar configuraciones guardadas
         const listas = ['proveedores', 'zonas', 'clasificadores', 'mesas', 'variedades'];
         for (const lista of listas) {
             const guardada = await obtenerConfig(`lista_${lista}`);
@@ -883,7 +873,6 @@ async function inicializar() {
             }
         }
 
-        // Render inicial
         inicializarCabecera();
         inicializarBuscadores();
         inicializarNumpad();
@@ -893,11 +882,9 @@ async function inicializar() {
         renderizarTodasLasListas();
         actualizarDisplay();
 
-        // Indicador y sync
         await actualizarIndicadorSync();
         sincronizarPendientes();
 
-        // Reintentar periódicamente
         setInterval(() => sincronizarPendientes(), INTERVALO_SYNC);
 
         console.log('✅ Aplicación inicializada');
