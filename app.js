@@ -62,7 +62,7 @@ let adminDesbloqueado = false;
 /* INDEXEDDB */
 /* ============================================ */
 const DB_NAME = 'WRC_RegistroCalidad';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_TX = 'transacciones';
 const STORE_CONFIG = 'config';
 let db = null;
