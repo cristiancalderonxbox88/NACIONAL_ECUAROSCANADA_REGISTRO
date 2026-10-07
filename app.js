@@ -1,219 +1,111 @@
-// ============================================================
-// REGISTRO NACIONAL CALIDAD - World Roses Center / Ecuaroscanada
-// app.js - Versión completa con IndexedDB + Google Sheets
-// ============================================================
-
-// ============================================================
-// ⚙️ CONFIGURACIÓN
-// ============================================================
+/* ============================================ */
+/* CONFIGURACIÓN */
+/* ============================================ */
 const PIN_ADMIN = "1234";
+
+// 🔗 Reemplaza con la URL de tu Apps Script (la que termina en /exec)
 const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbyslIJRHX7cfsY1qwoh2nqx1DUrKht1xVZGjXg38hUfqQYwiSbnbjMZpuo20qWaVWKw/exec";
 const INTERVALO_SYNC = 30000;
 
-// ============================================================
-// 📋 DATOS PRECARGADOS
-// ============================================================
-const PROVEEDORES_DEFAULT = [
-    "(05) QUIMBIAMBA CACUANGO PEDRO",
-    "(01) ECUAROSCANADA S.A.",
-    "(02) GRACE MESA",
-    "(03) HERNAN CABASCANGO",
-    "(04) ESTACIO CACHIPUENDO NATHALY SILVANA"
-];
-
-const ZONAS_DEFAULT = ["1", "2"];
-
-const CLASIFICADORES_DEFAULT = ["JM", "Y", "M", "C", "J", "D", "J-Y-D-JM", "JM-D"];
-
-const MESAS_DEFAULT = ["M1 CE", "M2 AM", "M3 VE", "M4 RO", "M5 MO", "M6 NA", "PETALOS"];
-
-const VARIEDADES_DEFAULT = [
-    "AMNESIA", "ARTC", "ATMC", "BLSH", "BRIGHTON", "CANDLELIGHT", "CARPE DIEM",
-    "COFFE BREAK", "COLOR", "COTTON XPRESSION", "COUNTRY BLUES", "DARK PINK ROSE",
-    "DEEP PURPLE", "DOZEN ROSE HOT PINK", "DOZEN ROSE LIGHT PINK",
-    "DOZEN ROSE NOVELTY-BI", "ANNA JULIA", "ATHOMIC", "BE SWEET", "BOULEVARD",
-    "CANDY X-PRESSION", "COTTON X-PRESSIÓN", "COUNTRY BLUE", "ECUA PINK",
-    "ESPERANCE", "EXOTIC BERRY", "EXPLORER", "FREE SPIRIT", "FRUTTETO", "FULL MONTY",
-    "GOTCHA", "HARD ROCK", "HEARTS", "HERMOSA", "HOT EXPLORER", "KAHALA", "LOLA",
-    "LORRAINE", "LUCIANO", "MAGIC TIMES", "MANDALA", "MANDARIN X-PRESSION",
-    "MONDIAL", "MOONSTONE", "NINA", "O`HARA", "OPALA", "PALOMA", "PINK FLOYD",
-    "PINK MONDIAL", "PINK XPRESSION", "PLAYA BLANCA", "POMAROSA", "POWDER PUFF",
-    "PRINCESS CROWN", "QUEENS CROWN", "QUICKSAND", "RED PANTHER", "SHIMMER",
-    "SILANTOI", "SUPER SUN", "WHITE OHARA"
-];
-
-const PLAGAS = [
-    "MALTRATO FOLLAJE", "BOTON MALTRATADO", "MALTRATO POSTCO", "B. ABIERTO",
-    "B. DEFORME", "CLOROTICO", "ROTOS", "TORCIDO", "C. DE GANZO", "TRIPS",
-    "ACAROS", "OIDIO", "BOTRITIS", "AFIDOS", "VELLOSO", "MAL DESYEME",
-    "FITO TOXICIDAD", "DEFIC. DE CALCIO", "TALLOS CORTOS", "P QUEMADOS",
-    "2 CABEZAS O MENOS", "TALLOS DELGADOS", "PÁLIDOS", "B. DESCABEZADO CULTIVO",
-    "INTOXICACIÓN", "SIN FOLLAJE", "GUSANO", "MB", "DIPTEROS", "LEPIDOPTEROS",
-    "COLEOPTEROS", "SEMILLA DE MALEZA", "OTROS"
-];
-
-// ============================================================
-// 🧠 ESTADO GLOBAL
-// ============================================================
-const estado = {
-    proveedores: [...PROVEEDORES_DEFAULT],
-    zonas: [...ZONAS_DEFAULT],
-    clasificadores: [...CLASIFICADORES_DEFAULT],
-    mesas: [...MESAS_DEFAULT],
-    variedades: [...VARIEDADES_DEFAULT],
-    seleccion: {
-        fecha: new Date().toISOString().split('T')[0],
-        proveedor: "",
-        zona: "",
-        mesa: "",
-        clasificador: "",
-        variedad: "",
-        plaga: "",
-        cantidad: ""
-    },
-    editandoId: null,
-    adminDesbloqueado: false,
-    sincronizando: false
+/* ============================================ */
+/* BASE DE DATOS EN MEMORIA */
+/* ============================================ */
+let datosSistema = {
+    proveedores: [
+        "(05) QUIMBIAMBA CACUANGO PEDRO",
+        "(01) ECUAROSCANADA S.A.",
+        "(02) GRACE MESA",
+        "(03) HERNAN CABASCANGO",
+        "(04) ESTACIO CACHIPUENDO NATHALY SILVANA"
+    ],
+    zonas: ["1", "2"],
+    clasificadores: ["JM", "Y", "M", "C", "J", "D", "J-Y-D-JM", "JM-D"],
+    mesas: ["M1 CE", "M2 AM", "M3 VE", "M4 RO", "M5 MO", "M6 NA", "PETALOS"],
+    variedades: [
+        "AMNESIA", "ARTC", "ATMC", "BLSH", "BRIGHTON", "CANDLELIGHT", "CARPE DIEM",
+        "COFFE BREAK", "COLOR", "COTTON XPRESSION", "COUNTRY BLUES", "DARK PINK ROSE",
+        "DEEP PURPLE", "DOZEN ROSE HOT PINK", "DOZEN ROSE LIGHT PINK", "DOZEN ROSE NOVELTY-BI",
+        "ANNA JULIA", "ATHOMIC", "BE SWEET", "BOULEVARD", "CANDY X-PRESSION", "CANDELIGHT",
+        "COTTON X-PRESSIÓN", "COUNTRY BLUE", "ECUA PINK", "ESPERANCE", "EXOTIC BERRY",
+        "EXPLORER", "FREE SPIRIT", "FRUTTETO", "FULL MONTY", "GOTCHA", "HARD ROCK",
+        "HEARTS", "HERMOSA", "HOT EXPLORER", "KAHALA", "LOLA", "LORRAINE", "LUCIANO",
+        "MAGIC TIMES", "MANDALA", "MANDARIN X-PRESSION", "MONDIAL", "MOONSTONE",
+        "NINA", "O`HARA", "OPALA", "PALOMA", "PINK FLOYD", "PINK MONDIAL", "PINK XPRESSION",
+        "PLAYA BLANCA", "POMAROSA", "POWDER PUFF", "PRINCESS CROWN", "QUEENS CROWN",
+        "QUICKSAND", "RED PANTHER", "SHIMMER", "SILANTOI", "SUPER SUN", "WHITE OHARA"
+    ],
+    plagas: [
+        "MALTRATO FOLLAJE", "BOTON MALTRATADO", "MALTRATO POSTCO", "B. ABIERTO",
+        "B. DEFORME", "CLOROTICO", "ROTOS", "TORCIDO", "C. DE GANZO", "TRIPS",
+        "ACAROS", "OIDIO", "BOTRITIS", "AFIDOS", "VELLOSO", "MAL DESYEME",
+        "FITO TOXICIDAD", "DEFIC. DE CALCIO", "TALLOS CORTOS", "P QUEMADOS",
+        "2 CABEZAS O MENOS", "TALLOS DELGADOS", "PÁLIDOS", "B. DESCABEZADO CULTIVO",
+        "INTOXICACIÓN", "SIN FOLLAJE", "GUSANO", "MB", "DIPTEROS", "LEPIDOPTEROS",
+        "COLEOPTEROS", "SEMILLA DE MALEZA", "OTROS"
+    ]
 };
 
-// ============================================================
-// 🗄️ MÓDULO INDEXEDDB
-// ============================================================
+/* ============================================ */
+/* ESTADO GLOBAL */
+/* ============================================ */
+let registrosLocales = [];
+let valorActual = "0";
+let mesaSeleccionada = null;
+let variedadSeleccionada = null;
+let plagaSeleccionada = null;
+let clasificadorSeleccionado = null;
+let indiceEditando = null;
+let pinIngresado = "";
+let adminDesbloqueado = false;
+
+/* ============================================ */
+/* INDEXEDDB */
+/* ============================================ */
 const DB_NAME = 'WRC_RegistroCalidad';
 const DB_VERSION = 1;
 const STORE_TX = 'transacciones';
-const STORE_CONFIG = 'configuracion';
-
+const STORE_CONFIG = 'config';
 let db = null;
 
 function abrirDB() {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
-
         req.onupgradeneeded = (e) => {
-            const database = e.target.result;
-            if (!database.objectStoreNames.contains(STORE_TX)) {
-                const store = database.createObjectStore(STORE_TX, {
-                    keyPath: 'id',
-                    autoIncrement: true
-                });
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains(STORE_TX)) {
+                const store = d.createObjectStore(STORE_TX, { keyPath: 'id', autoIncrement: true });
                 store.createIndex('sincronizada', 'sincronizada', { unique: false });
-                store.createIndex('fecha', 'fecha', { unique: false });
                 store.createIndex('uuid', 'uuid', { unique: true });
             }
-            if (!database.objectStoreNames.contains(STORE_CONFIG)) {
-                database.createObjectStore(STORE_CONFIG, { keyPath: 'clave' });
+            if (!d.objectStoreNames.contains(STORE_CONFIG)) {
+                d.createObjectStore(STORE_CONFIG, { keyPath: 'clave' });
             }
         };
-
-        req.onsuccess = (e) => {
-            db = e.target.result;
-            console.log('✅ IndexedDB abierta');
-            resolve(db);
-        };
-        req.onerror = (e) => {
-            console.error('❌ Error IndexedDB:', e.target.error);
-            reject(e.target.error);
-        };
+        req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+        req.onerror = (e) => reject(e.target.error);
     });
 }
 
-function guardarTransaccionLocal(tx) {
+function dbGuardarTransaccion(tx) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_TX, 'readwrite');
-        const store = transaction.objectStore(STORE_TX);
-        const registro = {
-            ...tx,
-            uuid: generarUUID(),
-            sincronizada: false,
-            timestamp: Date.now(),
-            intentos: 0
-        };
-        const req = store.add(registro);
+        const t = db.transaction(STORE_TX, 'readwrite');
+        const store = t.objectStore(STORE_TX);
+        const reg = { ...tx, uuid: generarUUID(), sincronizada: false, timestamp: Date.now(), intentos: 0 };
+        const req = store.add(reg);
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
 }
 
-function obtenerPendientes() {
+function dbActualizarTransaccion(id, datos) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_TX, 'readonly');
-        const store = tx.objectStore(STORE_TX);
-        const index = store.index('sincronizada');
-        const req = index.getAll(false);
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function obtenerTodas() {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_TX, 'readonly');
-        const store = tx.objectStore(STORE_TX);
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function marcarSincronizada(id) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_TX, 'readwrite');
-        const store = tx.objectStore(STORE_TX);
-        const req = store.get(id);
-        req.onsuccess = () => {
-            const r = req.result;
-            if (r) {
-                r.sincronizada = true;
-                r.fechaSincronizacion = Date.now();
-                store.put(r);
-            }
-            resolve();
-        };
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function incrementarIntentos(id) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_TX, 'readwrite');
-        const store = tx.objectStore(STORE_TX);
-        const req = store.get(id);
-        req.onsuccess = () => {
-            const r = req.result;
-            if (r) {
-                r.intentos = (r.intentos || 0) + 1;
-                store.put(r);
-            }
-            resolve();
-        };
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function eliminarTransaccionLocal(id) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_TX, 'readwrite');
-        const store = tx.objectStore(STORE_TX);
-        const req = store.delete(id);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function actualizarTransaccionLocal(id, datos) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_TX, 'readwrite');
-        const store = tx.objectStore(STORE_TX);
+        const t = db.transaction(STORE_TX, 'readwrite');
+        const store = t.objectStore(STORE_TX);
         const req = store.get(id);
         req.onsuccess = () => {
             const r = req.result;
             if (!r) return reject('No encontrado');
-            Object.assign(r, datos, {
-                sincronizada: false,
-                editada: true,
-                fechaEdicion: Date.now()
-            });
+            Object.assign(r, datos, { sincronizada: false, editada: true });
             store.put(r);
             resolve();
         };
@@ -221,48 +113,86 @@ function actualizarTransaccionLocal(id, datos) {
     });
 }
 
-function guardarConfig(clave, valor) {
+function dbEliminarTransaccion(id) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_CONFIG, 'readwrite');
-        const store = tx.objectStore(STORE_CONFIG);
+        const t = db.transaction(STORE_TX, 'readwrite');
+        const store = t.objectStore(STORE_TX);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function dbObtenerTodas() {
+    return new Promise((resolve, reject) => {
+        const t = db.transaction(STORE_TX, 'readonly');
+        const store = t.objectStore(STORE_TX);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function dbObtenerPendientes() {
+    return new Promise((resolve, reject) => {
+        const t = db.transaction(STORE_TX, 'readonly');
+        const store = t.objectStore(STORE_TX);
+        const idx = store.index('sincronizada');
+        const req = idx.getAll(false);
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function dbMarcarSincronizada(id) {
+    return new Promise((resolve, reject) => {
+        const t = db.transaction(STORE_TX, 'readwrite');
+        const store = t.objectStore(STORE_TX);
+        const req = store.get(id);
+        req.onsuccess = () => {
+            const r = req.result;
+            if (r) { r.sincronizada = true; r.fechaSincronizacion = Date.now(); store.put(r); }
+            resolve();
+        };
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function dbGuardarConfig(clave, valor) {
+    return new Promise((resolve, reject) => {
+        const t = db.transaction(STORE_CONFIG, 'readwrite');
+        const store = t.objectStore(STORE_CONFIG);
         const req = store.put({ clave, valor });
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
     });
 }
 
-function obtenerConfig(clave) {
+function dbObtenerConfig(clave) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_CONFIG, 'readonly');
-        const store = tx.objectStore(STORE_CONFIG);
+        const t = db.transaction(STORE_CONFIG, 'readonly');
+        const store = t.objectStore(STORE_CONFIG);
         const req = store.get(clave);
         req.onsuccess = () => resolve(req.result ? req.result.valor : null);
         req.onerror = () => reject(req.error);
     });
 }
 
-// ============================================================
-// 🔑 UTILIDADES
-// ============================================================
 function generarUUID() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
     });
 }
 
-// ============================================================
-// ☁️ MÓDULO DE SINCRONIZACIÓN
-// ============================================================
+/* ============================================ */
+/* SINCRONIZACIÓN CON GOOGLE SHEETS */
+/* ============================================ */
 async function enviarASheets(tx) {
-    if (!URL_APPS_SCRIPT || URL_APPS_SCRIPT.includes('TU_URL')) {
-        console.warn('⚠️ URL_APPS_SCRIPT no configurada');
-        return false;
-    }
+    if (!URL_APPS_SCRIPT || URL_APPS_SCRIPT.includes('TU_URL')) return false;
     try {
-        const response = await fetch(URL_APPS_SCRIPT, {
+        const res = await fetch(URL_APPS_SCRIPT, {
             method: 'POST',
             body: JSON.stringify({
                 accion: tx.editada ? 'actualizar' : 'crear',
@@ -273,625 +203,533 @@ async function enviarASheets(tx) {
                 mesa: tx.mesa,
                 clasificador: tx.clasificador,
                 variedad: tx.variedad,
-                plaga: tx.plaga,
+                plaga: tx.plaga_enfermedad,
                 cantidad: tx.cantidad
             })
         });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const result = await response.json();
-        return result.status === 'ok';
-    } catch (error) {
-        console.error('❌ Error enviando a Sheets:', error);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const r = await res.json();
+        return r.status === 'ok';
+    } catch (e) {
+        console.error('❌ Error sync:', e);
         return false;
     }
 }
 
 async function sincronizarPendientes() {
-    if (estado.sincronizando) return;
     if (!navigator.onLine) return;
-
-    const pendientes = await obtenerPendientes();
-    if (pendientes.length === 0) return;
-
-    estado.sincronizando = true;
-    actualizarIndicadorSync();
-    console.log(`🔄 Sincronizando ${pendientes.length} pendientes...`);
-
-    for (const tx of pendientes) {
-        const exito = await enviarASheets(tx);
-        if (exito) {
-            await marcarSincronizada(tx.id);
-        } else {
-            await incrementarIntentos(tx.id);
-            if ((tx.intentos || 0) + 1 >= 5) break;
-        }
+    const pend = await dbObtenerPendientes();
+    if (pend.length === 0) return;
+    console.log(`🔄 Sincronizando ${pend.length} pendientes...`);
+    for (const tx of pend) {
+        const ok = await enviarASheets(tx);
+        if (ok) await dbMarcarSincronizada(tx.id);
+        else break;
     }
-
-    estado.sincronizando = false;
     actualizarIndicadorSync();
+    await recargarRegistrosDesdeDB();
 }
 
 async function actualizarIndicadorSync() {
-    const indicador = document.getElementById('indicador-sync');
-    const icono = document.getElementById('sync-icono');
-    const texto = document.getElementById('sync-texto');
-    const badge = document.getElementById('sync-pendientes');
-    if (!indicador) return;
-
-    const pendientes = await obtenerPendientes();
-
-    indicador.classList.remove('online', 'offline', 'sincronizando');
-
+    const el = document.getElementById('sync-indicador');
+    if (!el) return;
+    const pend = await dbObtenerPendientes();
+    el.classList.remove('online', 'offline', 'sincronizando');
     if (!navigator.onLine) {
-        indicador.classList.add('offline');
-        if (icono) icono.textContent = '🔴';
-        if (texto) texto.textContent = 'Sin conexión';
-    } else if (estado.sincronizando || pendientes.length > 0) {
-        indicador.classList.add('sincronizando');
-        if (icono) icono.textContent = '🟡';
-        if (texto) texto.textContent = estado.sincronizando ? 'Sincronizando' : 'Pendientes';
+        el.classList.add('offline');
+        el.textContent = `🔴 Sin conexión${pend.length ? ' · ' + pend.length : ''}`;
+    } else if (pend.length > 0) {
+        el.classList.add('sincronizando');
+        el.textContent = `🟡 Sincronizando · ${pend.length}`;
     } else {
-        indicador.classList.add('online');
-        if (icono) icono.textContent = '🟢';
-        if (texto) texto.textContent = 'En línea';
-    }
-
-    if (badge) {
-        if (pendientes.length > 0) {
-            badge.style.display = 'inline-block';
-            badge.textContent = pendientes.length;
-        } else {
-            badge.style.display = 'none';
-        }
+        el.classList.add('online');
+        el.textContent = '🟢 En línea';
     }
 }
 
-window.addEventListener('online', () => {
-    console.log('🌐 Conexión restaurada');
+window.addEventListener('online', () => { actualizarIndicadorSync(); sincronizarPendientes(); });
+window.addEventListener('offline', () => actualizarIndicadorSync());
+
+async function recargarRegistrosDesdeDB() {
+    registrosLocales = await dbObtenerTodas();
+}
+
+/* ============================================ */
+/* RENDERIZADO */
+/* ============================================ */
+function renderizarSelectores() {
+    document.getElementById('proveedor').innerHTML =
+        datosSistema.proveedores.map(p => `<option value="${p}">${p}</option>`).join('');
+    document.getElementById('zona').innerHTML =
+        datosSistema.zonas.map(z => `<option value="${z}">Zona ${z}</option>`).join('');
+}
+
+function renderizarListas() {
+    document.getElementById('lista-mesas').innerHTML =
+        datosSistema.mesas.map(m => `<li data-id="${m}">${m}</li>`).join('');
+    document.getElementById('lista-clasificadores').innerHTML =
+        datosSistema.clasificadores.map(c => `<li data-id="${c}">${c}</li>`).join('');
+    document.getElementById('lista-variedades').innerHTML =
+        datosSistema.variedades.map(v => `<li data-id="${v}">${v}</li>`).join('');
+    document.getElementById('lista-plagas').innerHTML =
+        datosSistema.plagas.map(p => `<li data-id="${p}">${p}</li>`).join('');
+}
+
+/* ============================================ */
+/* BUSCADORES */
+/* ============================================ */
+function filtrarLista(idLista, textoBusqueda) {
+    const lista = document.getElementById(idLista);
+    const texto = textoBusqueda.toLowerCase().trim();
+    Array.from(lista.children).forEach(li => {
+        const contenido = li.getAttribute('data-id').toLowerCase();
+        li.style.display = contenido.includes(texto) ? 'flex' : 'none';
+    });
+}
+
+function toggleBuscador(idBuscador) {
+    const buscador = document.getElementById(idBuscador);
+    buscador.classList.toggle('activo');
+    if (buscador.classList.contains('activo')) {
+        const input = buscador.querySelector('input');
+        input.focus();
+        input.value = '';
+        const idLista = idBuscador.replace('buscador-', 'lista-');
+        filtrarLista(idLista, '');
+    }
+}
+
+/* ============================================ */
+/* TECLADO NUMÉRICO */
+/* ============================================ */
+function presionarTecla(num) {
+    if (valorActual === "0") valorActual = num;
+    else valorActual += num;
+    document.getElementById('pantalla').innerText = valorActual;
+}
+
+function borrarTodo() {
+    valorActual = "0";
+    document.getElementById('pantalla').innerText = valorActual;
+}
+
+/* ============================================ */
+/* SELECCIÓN DE LISTAS */
+/* ============================================ */
+function configurarLista(idLista, tipo) {
+    document.getElementById(idLista).addEventListener('click', (e) => {
+        if (e.target.tagName === 'LI') {
+            Array.from(e.currentTarget.children).forEach(li => li.classList.remove('active'));
+            e.target.classList.add('active');
+            const valor = e.target.getAttribute('data-id');
+            if (tipo === 'mesa') mesaSeleccionada = valor;
+            if (tipo === 'variedad') variedadSeleccionada = valor;
+            if (tipo === 'plaga') plagaSeleccionada = valor;
+            if (tipo === 'clasificador') clasificadorSeleccionado = valor;
+        }
+    });
+}
+
+/* ============================================ */
+/* INIT */
+/* ============================================ */
+async function init() {
+    await abrirDB();
+
+    // Cargar listas personalizadas guardadas por el admin
+    const listas = ['proveedores', 'zonas', 'clasificadores', 'mesas', 'variedades', 'plagas'];
+    for (const lista of listas) {
+        const guardada = await dbObtenerConfig(`lista_${lista}`);
+        if (guardada && Array.isArray(guardada)) datosSistema[lista] = guardada;
+    }
+
+    await recargarRegistrosDesdeDB();
+
+    renderizarSelectores();
+    renderizarListas();
+    configurarLista('lista-mesas', 'mesa');
+    configurarLista('lista-clasificadores', 'clasificador');
+    configurarLista('lista-variedades', 'variedad');
+    configurarLista('lista-plagas', 'plaga');
+
     actualizarIndicadorSync();
     sincronizarPendientes();
-});
-window.addEventListener('offline', () => {
-    console.log('📴 Sin conexión');
-    actualizarIndicadorSync();
-});
+    setInterval(() => sincronizarPendientes(), INTERVALO_SYNC);
 
-// ============================================================
-// 🎨 RENDERIZADO DE LISTAS
-// ============================================================
-function renderizarLista(contenedorId, items, tipo, filtro = '') {
-    const contenedor = document.getElementById(contenedorId);
-    if (!contenedor) return;
-    contenedor.innerHTML = '';
-
-    const filtroUpper = filtro.toUpperCase();
-    items
-        .filter(item => !filtro || item.toUpperCase().includes(filtroUpper))
-        .forEach(item => {
-            const btn = document.createElement('button');
-            btn.className = 'item-btn';
-            btn.textContent = item;
-
-            if (estado.seleccion[tipo] === item) {
-                btn.classList.add('seleccionado');
-            }
-
-            btn.addEventListener('click', () => {
-                estado.seleccion[tipo] = item;
-                renderizarTodasLasListas();
-            });
-
-            contenedor.appendChild(btn);
-        });
+    console.log('✅ App iniciada. Registros cargados:', registrosLocales.length);
 }
+init();
 
-function renderizarTodasLasListas() {
-    const filtros = {
-        mesas: document.getElementById('filtro-mesas')?.value || '',
-        clasificadores: document.getElementById('filtro-clasificadores')?.value || '',
-        variedades: document.getElementById('filtro-variedades')?.value || '',
-        plagas: document.getElementById('filtro-plagas')?.value || ''
-    };
-    renderizarLista('lista-mesas', estado.mesas, 'mesa', filtros.mesas);
-    renderizarLista('lista-clasificadores', estado.clasificadores, 'clasificador', filtros.clasificadores);
-    renderizarLista('lista-variedades', estado.variedades, 'variedad', filtros.variedades);
-    renderizarLista('lista-plagas', PLAGAS, 'plaga', filtros.plagas);
-
-    const display = document.getElementById('display-cantidad');
-    if (display) display.textContent = estado.seleccion.cantidad || '0';
-}
-
-// ============================================================
-// 🧮 TECLADO NUMÉRICO
-// ============================================================
-function inicializarNumpad() {
-    document.querySelectorAll('.numpad-btn[data-num]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const n = btn.dataset.num;
-            if (estado.seleccion.cantidad.length < 6) {
-                estado.seleccion.cantidad += n;
-                actualizarDisplay();
-            }
-        });
-    });
-
-    document.getElementById('btn-borrar')?.addEventListener('click', () => {
-        estado.seleccion.cantidad = estado.seleccion.cantidad.slice(0, -1);
-        actualizarDisplay();
-    });
-
-    document.getElementById('btn-limpiar')?.addEventListener('click', () => {
-        estado.seleccion.cantidad = '';
-        actualizarDisplay();
-    });
-}
-
-function actualizarDisplay() {
-    const display = document.getElementById('display-cantidad');
-    if (display) display.textContent = estado.seleccion.cantidad || '0';
-}
-
-// ============================================================
-// 💾 GUARDAR / ACTUALIZAR TRANSACCIÓN
-// ============================================================
-async function guardarTransaccion() {
-    const s = estado.seleccion;
-
-    if (!s.fecha || !s.proveedor || !s.zona || !s.mesa ||
-        !s.clasificador || !s.variedad || !s.plaga || !s.cantidad) {
-        alert('⚠️ Debes completar todos los campos');
-        return;
-    }
-
-    const transaccion = {
-        fecha: s.fecha,
-        proveedor: s.proveedor,
-        zona: s.zona,
-        mesa: s.mesa,
-        clasificador: s.clasificador,
-        variedad: s.variedad,
-        plaga: s.plaga,
-        cantidad: parseInt(s.cantidad)
-    };
-
-    try {
-        if (estado.editandoId !== null) {
-            await actualizarTransaccionLocal(estado.editandoId, transaccion);
-            estado.editandoId = null;
-            cambiarBotonGuardar(false);
-            console.log('✏️ Transacción actualizada');
-        } else {
-            const id = await guardarTransaccionLocal(transaccion);
-            console.log('💾 Guardado local con ID:', id);
-        }
-
-        if (navigator.onLine) {
-            sincronizarPendientes();
-        }
-
-        actualizarIndicadorSync();
-
-        // Limpiar solo variedad, plaga y cantidad
-        s.variedad = '';
-        s.plaga = '';
-        s.cantidad = '';
-        actualizarDisplay();
-        renderizarTodasLasListas();
-
-    } catch (error) {
-        console.error('Error guardando:', error);
-        alert('❌ Error al guardar. Intenta de nuevo.');
-    }
-}
-
-function cambiarBotonGuardar(modoEdicion) {
-    const btn = document.getElementById('btn-guardar');
-    if (!btn) return;
-    if (modoEdicion) {
-        btn.textContent = 'Actualizar';
-        btn.classList.add('editando');
-    } else {
-        btn.textContent = 'Guardar';
-        btn.classList.remove('editando');
-    }
-}
-
-// ============================================================
-// 🧑‍💼 MODAL ADMIN
-// ============================================================
-let adminBuffer = '';
-
+/* ============================================ */
+/* MODAL ADMIN - CON PIN */
+/* ============================================ */
 function abrirAdmin() {
-    if (estado.adminDesbloqueado) {
-        mostrarPanelAdmin();
+    document.getElementById('modalAdmin').style.display = 'flex';
+    if (adminDesbloqueado) mostrarVistaAdmin();
+    else mostrarVistaPin();
+}
+
+function cerrarAdmin() {
+    document.getElementById('modalAdmin').style.display = 'none';
+    pinIngresado = "";
+    actualizarPinDisplay();
+    document.getElementById('pinError').innerText = "";
+    document.getElementById('adminInput').value = '';
+}
+
+function mostrarVistaPin() {
+    document.getElementById('vistaPin').style.display = 'block';
+    document.getElementById('vistaAdmin').style.display = 'none';
+    pinIngresado = "";
+    actualizarPinDisplay();
+    document.getElementById('pinError').innerText = "";
+}
+
+function mostrarVistaAdmin() {
+    document.getElementById('vistaPin').style.display = 'none';
+    document.getElementById('vistaAdmin').style.display = 'block';
+    actualizarVistaAdmin();
+}
+
+/* ============================================ */
+/* TECLADO DEL PIN */
+/* ============================================ */
+function presionarPin(num) {
+    if (pinIngresado.length >= 4) return;
+    pinIngresado += num;
+    actualizarPinDisplay();
+    document.getElementById('pinError').innerText = "";
+    if (pinIngresado.length === 4) setTimeout(validarPin, 200);
+}
+
+function borrarPin() {
+    pinIngresado = pinIngresado.slice(0, -1);
+    actualizarPinDisplay();
+    document.getElementById('pinError').innerText = "";
+}
+
+function actualizarPinDisplay() {
+    const dots = document.querySelectorAll('#pinDisplay .pin-dot');
+    dots.forEach((dot, index) => {
+        if (index < pinIngresado.length) dot.classList.add('lleno');
+        else dot.classList.remove('lleno');
+    });
+}
+
+function validarPin() {
+    const display = document.getElementById('pinDisplay');
+    if (pinIngresado === PIN_ADMIN) {
+        adminDesbloqueado = true;
+        mostrarVistaAdmin();
+    } else {
+        display.classList.add('error');
+        document.getElementById('pinError').innerText = "❌ PIN incorrecto. Intenta de nuevo.";
+        setTimeout(() => {
+            display.classList.remove('error');
+            pinIngresado = "";
+            actualizarPinDisplay();
+        }, 600);
+    }
+}
+
+/* ============================================ */
+/* ADMIN - AGREGAR Y ELIMINAR */
+/* ============================================ */
+function actualizarVistaAdmin() {
+    const categoria = document.getElementById('adminCategoria').value;
+    const listaActual = datosSistema[categoria];
+    const contenedorLista = document.getElementById('adminListaActual');
+    const placeholders = {
+        proveedores: "Nombre del Proveedor",
+        zonas: "Número de Zona (Ej. 3)",
+        clasificadores: "Código Clasificador (Ej. JM)",
+        mesas: "Nombre de la Mesa (Ej. M7 LP)",
+        variedades: "Nombre de la Variedad"
+    };
+    document.getElementById('adminInput').placeholder = placeholders[categoria] || "Escribe el nombre aquí...";
+
+    if (listaActual.length === 0) {
+        contenedorLista.innerHTML = '<li style="text-align:center;padding:15px;color:#999;font-size:13px;">No hay items en esta categoría.</li>';
         return;
     }
-    adminBuffer = '';
-    actualizarPuntosAdmin();
-    document.getElementById('modal-pin')?.classList.add('visible');
+    contenedorLista.innerHTML = listaActual.map((item, index) => `
+        <li class="admin-item">
+            <span class="item-texto">• ${item}</span>
+            <button class="btn-eliminar-item" onclick="eliminarItemAdmin('${categoria}', ${index})" title="Eliminar">🗑️</button>
+        </li>
+    `).join('');
 }
 
-function actualizarPuntosAdmin() {
-    const puntos = document.getElementById('pin-puntos');
-    if (puntos) puntos.textContent = '●'.repeat(adminBuffer.length) + '○'.repeat(4 - adminBuffer.length);
+async function agregarItemAdmin() {
+    const categoria = document.getElementById('adminCategoria').value;
+    const input = document.getElementById('adminInput');
+    const nuevoValor = input.value.trim();
+    if (nuevoValor === "") { alert("Escribe un valor válido."); return; }
+    if (datosSistema[categoria].includes(nuevoValor)) { alert("Este registro ya existe."); return; }
+
+    datosSistema[categoria].push(nuevoValor);
+    await dbGuardarConfig(`lista_${categoria}`, datosSistema[categoria]);
+    renderizarSelectores();
+    renderizarListas();
+    actualizarVistaAdmin();
+    input.value = '';
 }
 
-function inicializarPin() {
-    document.querySelectorAll('.pin-btn[data-pin]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (adminBuffer.length >= 4) return;
-            adminBuffer += btn.dataset.pin;
-            actualizarPuntosAdmin();
-            if (adminBuffer.length === 4) {
-                setTimeout(() => {
-                    if (adminBuffer === PIN_ADMIN) {
-                        estado.adminDesbloqueado = true;
-                        document.getElementById('modal-pin')?.classList.remove('visible');
-                        mostrarPanelAdmin();
-                    } else {
-                        alert('❌ PIN incorrecto');
-                        adminBuffer = '';
-                        actualizarPuntosAdmin();
-                    }
-                }, 200);
-            }
-        });
-    });
-
-    document.getElementById('pin-borrar')?.addEventListener('click', () => {
-        adminBuffer = adminBuffer.slice(0, -1);
-        actualizarPuntosAdmin();
-    });
-
-    document.getElementById('pin-cerrar')?.addEventListener('click', () => {
-        adminBuffer = '';
-        document.getElementById('modal-pin')?.classList.remove('visible');
-    });
+async function eliminarItemAdmin(categoria, index) {
+    const item = datosSistema[categoria][index];
+    if (!confirm(`¿Eliminar "${item}" de la lista de ${categoria}?`)) return;
+    datosSistema[categoria].splice(index, 1);
+    await dbGuardarConfig(`lista_${categoria}`, datosSistema[categoria]);
+    renderizarSelectores();
+    renderizarListas();
+    actualizarVistaAdmin();
 }
 
-function mostrarPanelAdmin() {
-    const modal = document.getElementById('modal-admin');
-    if (!modal) return;
-    modal.classList.add('visible');
-    renderizarAdminListas();
+/* ============================================ */
+/* MODAL TRANSACCIONES */
+/* ============================================ */
+function abrirTransacciones() {
+    document.getElementById('modalTransacciones').style.display = 'flex';
+    renderizarTransacciones();
 }
 
-function renderizarAdminListas() {
-    const mapas = {
-        'admin-proveedores': { items: estado.proveedores, tipo: 'proveedor' },
-        'admin-zonas': { items: estado.zonas, tipo: 'zona' },
-        'admin-clasificadores': { items: estado.clasificadores, tipo: 'clasificador' },
-        'admin-mesas': { items: estado.mesas, tipo: 'mesa' },
-        'admin-variedades': { items: estado.variedades, tipo: 'variedad' }
-    };
-
-    Object.entries(mapas).forEach(([id, { items, tipo }]) => {
-        const cont = document.getElementById(id);
-        if (!cont) return;
-        cont.innerHTML = '';
-        items.forEach((item, idx) => {
-            const div = document.createElement('div');
-            div.className = 'admin-item';
-            const span = document.createElement('span');
-            span.textContent = item;
-            const btn = document.createElement('button');
-            btn.textContent = '🗑️';
-            btn.className = 'btn-eliminar';
-            btn.onclick = () => {
-                if (!confirm(`¿Eliminar "${item}"?`)) return;
-                items.splice(idx, 1);
-                guardarConfig(`lista_${tipo}s`, items);
-                renderizarAdminListas();
-                renderizarTodasLasListas();
-            };
-            div.appendChild(span);
-            div.appendChild(btn);
-            cont.appendChild(div);
-        });
-    });
+function cerrarTransacciones() {
+    document.getElementById('modalTransacciones').style.display = 'none';
+    if (indiceEditando !== null) cancelarEdicion();
 }
 
-function inicializarAdminBotones() {
-    document.querySelectorAll('[data-admin-add]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tipo = btn.dataset.adminAdd;
-            const input = document.getElementById(`input-admin-${tipo}`);
-            if (!input || !input.value.trim()) return;
-            const valor = input.value.trim();
-            if (estado[`${tipo}s`].includes(valor)) {
-                alert('Ya existe');
-                return;
-            }
-            estado[`${tipo}s`].push(valor);
-            guardarConfig(`lista_${tipo}s`, estado[`${tipo}s`]);
-            input.value = '';
-            renderizarAdminListas();
-            renderizarTodasLasListas();
-        });
-    });
+function renderizarTransacciones() {
+    const tbody = document.getElementById('tablaTransaccionesBody');
+    const contador = document.getElementById('contadorTransacciones');
+    contador.innerText = `${registrosLocales.length} registro${registrosLocales.length !== 1 ? 's' : ''}`;
 
-    document.getElementById('admin-cerrar')?.addEventListener('click', () => {
-        document.getElementById('modal-admin')?.classList.remove('visible');
-    });
-}
+    if (registrosLocales.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="sin-registros">No hay transacciones registradas aún.</td></tr>`;
+        return;
+    }
 
-// ============================================================
-// 📋 MODAL TRANSACCIONES
-// ============================================================
-async function abrirTransacciones() {
-    const modal = document.getElementById('modal-transacciones');
-    if (!modal) return;
-    modal.classList.add('visible');
-    await renderizarTransacciones();
-}
-
-async function renderizarTransacciones() {
-    const tbody = document.getElementById('transacciones-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    const todas = await obtenerTodas();
-    todas.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-    todas.forEach((tx, idx) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${idx + 1}</td>
-            <td>${tx.fecha}</td>
-            <td>${tx.proveedor}</td>
-            <td>${tx.mesa}</td>
-            <td>${tx.clasificador}</td>
-            <td>${tx.variedad}</td>
-            <td>${tx.plaga}</td>
-            <td>${tx.cantidad}</td>
-            <td>
-                <button class="btn-editar" data-id="${tx.id}">✏️</button>
-                <button class="btn-eliminar" data-id="${tx.id}">🗑️</button>
-                <span class="estado-sync">${tx.sincronizada ? '🟢' : '🟡'}</span>
-            </td>
+    tbody.innerHTML = registrosLocales.map((reg, index) => {
+        const esEditando = indiceEditando === index;
+        let fechaBonita = reg.fecha;
+        if (reg.fecha) {
+            const p = reg.fecha.split('-');
+            if (p.length === 3) fechaBonita = `${p[2]}/${p[1]}/${p[0]}`;
+        }
+        const proveedorCorto = reg.proveedor.replace(/^\(\d+\)\s*/, '').substring(0, 25) + (reg.proveedor.length > 30 ? '...' : '');
+        const syncIcon = reg.sincronizada ? '🟢' : '🟡';
+        return `
+            <tr class="${esEditando ? 'editando' : ''}">
+                <td><strong>${index + 1}</strong></td>
+                <td style="white-space: nowrap;">${fechaBonita}</td>
+                <td title="${reg.proveedor}">${proveedorCorto}</td>
+                <td>${reg.mesa}</td>
+                <td>${reg.clasificador}</td>
+                <td>${reg.variedad}</td>
+                <td>${reg.plaga_enfermedad}</td>
+                <td><strong>${reg.cantidad}</strong> ${syncIcon}</td>
+                <td style="white-space: nowrap;">
+                    <button class="btn-accion btn-editar" onclick="editarTransaccion(${index})" title="Editar">✏️</button>
+                    <button class="btn-accion btn-eliminar" onclick="eliminarTransaccion(${index})" title="Eliminar">🗑️</button>
+                </td>
+            </tr>
         `;
-        tbody.appendChild(tr);
-    });
+    }).join('');
+}
 
-    tbody.querySelectorAll('.btn-editar').forEach(btn => {
-        btn.onclick = () => editarTransaccion(parseInt(btn.dataset.id));
-    });
-    tbody.querySelectorAll('.btn-eliminar').forEach(btn => {
-        btn.onclick = () => eliminarTransaccion(parseInt(btn.dataset.id));
+function editarTransaccion(index) {
+    const reg = registrosLocales[index];
+    indiceEditando = index;
+    document.getElementById('modalTransacciones').style.display = 'none';
+
+    mesaSeleccionada = reg.mesa;
+    marcarActivo('lista-mesas', reg.mesa);
+    clasificadorSeleccionado = reg.clasificador;
+    marcarActivo('lista-clasificadores', reg.clasificador);
+    variedadSeleccionada = reg.variedad;
+    marcarActivo('lista-variedades', reg.variedad);
+    plagaSeleccionada = reg.plaga_enfermedad;
+    marcarActivo('lista-plagas', reg.plaga_enfermedad);
+
+    valorActual = String(reg.cantidad);
+    document.getElementById('pantalla').innerText = valorActual;
+
+    const btn = document.querySelector('.btn-guardar-rojo');
+    btn.innerText = "Actualizar";
+    btn.style.backgroundColor = "#ff9800";
+
+    agregarBotonCancelar();
+    window.scrollTo(0, 0);
+}
+
+function marcarActivo(idLista, valor) {
+    const lista = document.getElementById(idLista);
+    Array.from(lista.children).forEach(li => {
+        li.classList.remove('active');
+        if (li.getAttribute('data-id') === valor) li.classList.add('active');
     });
 }
 
-async function editarTransaccion(id) {
-    const todas = await obtenerTodas();
-    const tx = todas.find(t => t.id === id);
-    if (!tx) return;
-
-    Object.assign(estado.seleccion, {
-        fecha: tx.fecha,
-        proveedor: tx.proveedor,
-        zona: tx.zona,
-        mesa: tx.mesa,
-        clasificador: tx.clasificador,
-        variedad: tx.variedad,
-        plaga: tx.plaga,
-        cantidad: String(tx.cantidad)
-    });
-    estado.editandoId = id;
-    cambiarBotonGuardar(true);
-    renderizarTodasLasListas();
-    actualizarDisplay();
-    sincronizarCabeceraConEstado();
-
-    document.getElementById('modal-transacciones')?.classList.remove('visible');
+function agregarBotonCancelar() {
+    if (document.getElementById('btnCancelarEdicion')) return;
+    const btnGuardar = document.querySelector('.btn-guardar-rojo');
+    const btnCancelar = document.createElement('button');
+    btnCancelar.id = 'btnCancelarEdicion';
+    btnCancelar.innerText = "Cancelar";
+    btnCancelar.style.cssText = `background-color: #757575; color: white; border: none; padding: 12px 20px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; margin-left: 10px;`;
+    btnCancelar.onclick = cancelarEdicion;
+    btnGuardar.parentNode.insertBefore(btnCancelar, btnGuardar.nextSibling);
 }
 
-async function eliminarTransaccion(id) {
-    if (!confirm('¿Eliminar esta transacción?')) return;
-    await eliminarTransaccionLocal(id);
-    await renderizarTransacciones();
+function cancelarEdicion() {
+    indiceEditando = null;
+    const btn = document.querySelector('.btn-guardar-rojo');
+    btn.innerText = "Guardar";
+    btn.style.backgroundColor = "#e74c3c";
+    const btnCancelar = document.getElementById('btnCancelarEdicion');
+    if (btnCancelar) btnCancelar.remove();
+    borrarTodo();
+    mesaSeleccionada = null;
+    variedadSeleccionada = null;
+    plagaSeleccionada = null;
+    clasificadorSeleccionado = null;
+    document.querySelectorAll('.lista-items li').forEach(li => li.classList.remove('active'));
+}
+
+async function eliminarTransaccion(index) {
+    const reg = registrosLocales[index];
+    if (!confirm(`¿Eliminar este registro?\n\nMesa: ${reg.mesa}\nVariedad: ${reg.variedad}\nPlaga: ${reg.plaga_enfermedad}\nCantidad: ${reg.cantidad}`)) return;
+
+    if (reg.id) await dbEliminarTransaccion(reg.id);
+    registrosLocales.splice(index, 1);
+    if (indiceEditando === index) cancelarEdicion();
+    else if (indiceEditando !== null && indiceEditando > index) indiceEditando--;
+    renderizarTransacciones();
     actualizarIndicadorSync();
 }
 
-function sincronizarCabeceraConEstado() {
-    const s = estado.seleccion;
-    const fechaInput = document.getElementById('input-fecha');
-    const proveedorSel = document.getElementById('select-proveedor');
-    const zonaSel = document.getElementById('select-zona');
-    if (fechaInput) fechaInput.value = s.fecha;
-    if (proveedorSel) proveedorSel.value = s.proveedor;
-    if (zonaSel) zonaSel.value = s.zona;
+/* ============================================ */
+/* CERRAR MODALES AL CLIC FUERA */
+/* ============================================ */
+window.onclick = function(event) {
+    const mAdmin = document.getElementById('modalAdmin');
+    const mTrans = document.getElementById('modalTransacciones');
+    if (event.target === mAdmin) cerrarAdmin();
+    if (event.target === mTrans) cerrarTransacciones();
+};
+
+/* ============================================ */
+/* GUARDAR / ACTUALIZAR */
+/* ============================================ */
+async function guardarRegistro() {
+    if (!mesaSeleccionada || !variedadSeleccionada || !plagaSeleccionada || !clasificadorSeleccionado) {
+        alert("Selecciona Mesa, Clasificador, Variedad y Plaga/Enfermedad.");
+        return;
+    }
+    if (valorActual === "0") { alert("Ingresa una cantidad mayor a 0."); return; }
+
+    const nuevoRegistro = {
+        fecha: document.getElementById('fecha').value,
+        proveedor: document.getElementById('proveedor').value,
+        zona: document.getElementById('zona').value,
+        clasificador: clasificadorSeleccionado,
+        mesa: mesaSeleccionada,
+        variedad: variedadSeleccionada,
+        plaga_enfermedad: plagaSeleccionada,
+        cantidad: parseInt(valorActual)
+    };
+
+    if (indiceEditando !== null) {
+        const regActual = registrosLocales[indiceEditando];
+        if (regActual.id) await dbActualizarTransaccion(regActual.id, nuevoRegistro);
+        registrosLocales[indiceEditando] = { ...regActual, ...nuevoRegistro, sincronizada: false };
+
+        indiceEditando = null;
+        const btn = document.querySelector('.btn-guardar-rojo');
+        btn.innerText = "Guardar";
+        btn.style.backgroundColor = "#e74c3c";
+        const btnCancelar = document.getElementById('btnCancelarEdicion');
+        if (btnCancelar) btnCancelar.remove();
+        alert("✅ Registro actualizado correctamente.");
+    } else {
+        await dbGuardarTransaccion(nuevoRegistro);
+        await recargarRegistrosDesdeDB();
+
+        const btn = document.querySelector('.btn-guardar-rojo');
+        const textoOriginal = btn.innerText;
+        btn.innerText = "¡Guardado!";
+        btn.style.backgroundColor = "#27ae60";
+        setTimeout(() => {
+            btn.innerText = textoOriginal;
+            btn.style.backgroundColor = "#e74c3c";
+        }, 1000);
+    }
+
+    // Sincronizar en segundo plano
+    if (navigator.onLine) sincronizarPendientes();
+    actualizarIndicadorSync();
+
+    // Limpiar solo Variedad, Plaga y teclado
+    borrarTodo();
+    variedadSeleccionada = null;
+    plagaSeleccionada = null;
+    document.querySelectorAll('#lista-variedades li, #lista-plagas li')
+        .forEach(li => li.classList.remove('active'));
 }
 
-// ============================================================
-// 📊 GENERACIÓN DE EXCEL
-// ============================================================
-async function descargarExcel() {
-    if (typeof XLSX === 'undefined') {
-        alert('❌ SheetJS no está cargado. Verifica el CDN en index.html.');
-        return;
-    }
+/* ============================================ */
+/* GENERAR EXCEL */
+/* ============================================ */
+function generarExcel() {
+    const fechaSeleccionada = document.getElementById('fecha').value;
+    const proveedorSeleccionado = document.getElementById('proveedor').value;
+    const zonaSeleccionada = document.getElementById('zona').value;
 
-    const todas = await obtenerTodas();
-    if (todas.length === 0) {
-        alert('No hay transacciones para exportar');
-        return;
-    }
-
-    const s = estado.seleccion;
-    const filtradas = todas.filter(t =>
-        (!s.proveedor || t.proveedor === s.proveedor) &&
-        (!s.fecha || t.fecha === s.fecha)
+    const registrosFiltrados = registrosLocales.filter(r =>
+        r.fecha === fechaSeleccionada &&
+        r.proveedor === proveedorSeleccionado &&
+        r.zona === zonaSeleccionada
     );
 
-    if (filtradas.length === 0) {
-        alert('No hay transacciones con los filtros actuales');
+    if (registrosFiltrados.length === 0) {
+        alert("No hay registros guardados para esta fecha, proveedor y zona.");
         return;
     }
 
-    const cabeceras = ['FECHA', 'AÑO', 'MES', 'SEMANA', 'DIA', 'ZONA', 'VARIEDAD',
-        ...PLAGAS, 'TOTAL', 'CLASIFICADOR'];
+    const columnasExcel = [
+        "FECHA", "AÑO", "MES", "SEMANA", "DIA", "ZONA", "VARIEDAD",
+        "MALTRATO FOLLAJE", "BOTON MALTRATADO", "MALTRATO POSTCO", "B. ABIERTO",
+        "B. DEFORME", "CLOROTICO", "ROTOS", "TORCIDO", "C. DE GANZO", "TRIPS",
+        "ACAROS", "OIDIO", "BOTRITIS", "AFIDOS", "VELLOSO", "MAL DESYEME",
+        "FITO TOXICIDAD", "DEFIC. DE CALCIO", "TALLOS CORTOS", "P QUEMADOS",
+        "2 CABEZAS O MENOS", "TALLOS DELGADOS", "PÁLIDOS", "B. DESCABEZADO CULTIVO",
+        "INTOXICACIÓN", "SIN FOLLAJE", "GUSANO", "MB", "DIPTEROS", "LEPIDOPTEROS",
+        "COLEOPTEROS", "SEMILLA DE MALEZA", "OTROS", "TOTAL", "CLASIFICADOR"
+    ];
 
-    const agrupado = {};
-    filtradas.forEach(t => {
-        const key = `${t.variedad}|${t.zona}|${t.clasificador}`;
-        if (!agrupado[key]) {
-            agrupado[key] = {
-                fecha: t.fecha,
-                zona: t.zona,
-                variedad: t.variedad,
-                clasificador: t.clasificador,
-                plagas: {}
+    const datosAgrupados = {};
+    registrosFiltrados.forEach((data) => {
+        const variedad = data.variedad;
+        if (!datosAgrupados[variedad]) {
+            const p = data.fecha.split('-');
+            datosAgrupados[variedad] = {
+                "FECHA": data.fecha, "AÑO": p[0], "MES": p[1], "SEMANA": "40",
+                "DIA": p[2], "ZONA": data.zona, "VARIEDAD": variedad,
+                "CLASIFICADOR": data.clasificador, "TOTAL": 0
             };
+            columnasExcel.forEach(col => {
+                if (datosAgrupados[variedad][col] === undefined) datosAgrupados[variedad][col] = 0;
+            });
         }
-        agrupado[key].plagas[t.plaga] = (agrupado[key].plagas[t.plaga] || 0) + t.cantidad;
+        const plaga = data.plaga_enfermedad;
+        if (datosAgrupados[variedad][plaga] !== undefined) datosAgrupados[variedad][plaga] += data.cantidad;
+        else datosAgrupados[variedad]["OTROS"] += data.cantidad;
+        datosAgrupados[variedad]["TOTAL"] += data.cantidad;
     });
 
-    const filas = [cabeceras];
-    Object.values(agrupado).forEach(g => {
-        const fecha = new Date(g.fecha + 'T12:00:00');
-        const año = fecha.getFullYear();
-        const mes = fecha.getMonth() + 1;
-        const dia = fecha.getDate();
-        const semana = getSemanaISO(fecha);
-
-        let total = 0;
-        const fila = [g.fecha, año, mes, semana, dia, g.zona, g.variedad];
-
-        PLAGAS.forEach(p => {
-            const v = g.plagas[p] || 0;
-            fila.push(v);
-            total += v;
-        });
-
-        fila.push(total, g.clasificador);
-        filas.push(fila);
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet(filas);
+    const dataArray = Object.values(datosAgrupados);
+    const ws = XLSX.utils.json_to_sheet(dataArray, { header: columnasExcel });
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Nacional');
-
-    const nombre = `NACIONAL_${(s.proveedor || 'TODOS').replace(/[^\w]/g, '_')}_${s.fecha || 'TODAS'}.xlsx`;
-    XLSX.writeFile(wb, nombre);
-    console.log('📊 Excel generado:', nombre);
+    XLSX.utils.book_append_sheet(wb, ws, "Nacional");
+    const nombreArchivo = `NACIONAL_${proveedorSeleccionado.replace(/[^a-zA-Z0-9]/g, '_')}_${fechaSeleccionada}.xlsx`;
+    XLSX.writeFile(wb, nombreArchivo);
 }
-
-function getSemanaISO(fecha) {
-    const d = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-}
-
-// ============================================================
-// 🎛️ INICIALIZACIÓN DE EVENTOS
-// ============================================================
-function inicializarCabecera() {
-    const fechaInput = document.getElementById('input-fecha');
-    const proveedorSel = document.getElementById('select-proveedor');
-    const zonaSel = document.getElementById('select-zona');
-
-    if (fechaInput) {
-        fechaInput.value = estado.seleccion.fecha;
-        fechaInput.addEventListener('change', e => {
-            estado.seleccion.fecha = e.target.value;
-        });
-    }
-    if (proveedorSel) {
-        // Limpiar primero para evitar duplicados
-        proveedorSel.innerHTML = '<option value="">-- Seleccionar --</option>';
-        estado.proveedores.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            opt.textContent = p;
-            proveedorSel.appendChild(opt);
-        });
-        proveedorSel.addEventListener('change', e => {
-            estado.seleccion.proveedor = e.target.value;
-        });
-    }
-    if (zonaSel) {
-        zonaSel.innerHTML = '<option value="">--</option>';
-        estado.zonas.forEach(z => {
-            const opt = document.createElement('option');
-            opt.value = z;
-            opt.textContent = z;
-            zonaSel.appendChild(opt);
-        });
-        zonaSel.addEventListener('change', e => {
-            estado.seleccion.zona = e.target.value;
-        });
-    }
-}
-
-function inicializarBuscadores() {
-    const mapa = {
-        'filtro-mesas': 'mesas',
-        'filtro-clasificadores': 'clasificadores',
-        'filtro-variedades': 'variedades',
-        'filtro-plagas': 'plagas'
-    };
-    Object.keys(mapa).forEach(id => {
-        const input = document.getElementById(id);
-        if (input) {
-            input.addEventListener('input', () => renderizarTodasLasListas());
-        }
-    });
-
-    document.querySelectorAll('.lupa').forEach(lupa => {
-        lupa.addEventListener('click', () => {
-            const target = document.getElementById(lupa.dataset.target);
-            if (target) target.classList.toggle('visible');
-        });
-    });
-}
-
-function inicializarBotonesPrincipales() {
-    document.getElementById('btn-guardar')?.addEventListener('click', guardarTransaccion);
-    document.getElementById('btn-admin')?.addEventListener('click', abrirAdmin);
-    document.getElementById('btn-transacciones')?.addEventListener('click', abrirTransacciones);
-    document.getElementById('btn-excel')?.addEventListener('click', descargarExcel);
-
-    document.getElementById('transacciones-cerrar')?.addEventListener('click', () => {
-        document.getElementById('modal-transacciones')?.classList.remove('visible');
-    });
-}
-
-// ============================================================
-// 🚀 INICIALIZACIÓN GENERAL
-// ============================================================
-async function inicializar() {
-    try {
-        await abrirDB();
-
-        const listas = ['proveedores', 'zonas', 'clasificadores', 'mesas', 'variedades'];
-        for (const lista of listas) {
-            const guardada = await obtenerConfig(`lista_${lista}`);
-            if (guardada && Array.isArray(guardada)) {
-                estado[lista] = guardada;
-            }
-        }
-
-        inicializarCabecera();
-        inicializarBuscadores();
-        inicializarNumpad();
-        inicializarPin();
-        inicializarAdminBotones();
-        inicializarBotonesPrincipales();
-        renderizarTodasLasListas();
-        actualizarDisplay();
-
-        await actualizarIndicadorSync();
-        sincronizarPendientes();
-
-        setInterval(() => sincronizarPendientes(), INTERVALO_SYNC);
-
-        console.log('✅ Aplicación inicializada');
-    } catch (error) {
-        console.error('❌ Error en inicialización:', error);
-        alert('Error al iniciar la aplicación. Revisa la consola.');
-    }
-}
-
-window.addEventListener('load', inicializar);
