@@ -1,6 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
-   v2.3: Sin botón 🖨️ + ZONA obligatoria
+   v2.3: Sin botón 🖨️ + ZONA obligatoria + 🗓️ rango de fechas
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -25,9 +25,6 @@ const firebaseConfig = {
 
 const PIN_ADMIN = "1234";
 
-/* =========================================================
-   CATÁLOGOS SEMILLA
-   ========================================================= */
 const DEFAULT_CATALOGOS = {
   proveedores: [
     "(05) QUIMBIAMBA CACUANGO PEDRO","(01) ECUAROSCANADA S.A.",
@@ -68,9 +65,6 @@ const ETIQUETAS_CAT = {
   mesas:"Mesas", variedades:"Variedades", plagas:"Plagas"
 };
 
-/* =========================================================
-   COLUMNAS EXCEL — 42 columnas exactas
-   ========================================================= */
 const PLAGAS_ORDEN = [
   "MALTRATO FOLLAJE","BOTON MALTRATADO","MALTRATO POSTCO","B. ABIERTO",
   "B. DEFORME","CLOROTICO","ROTOS","TORCIDO","C. DE GANZO","TRIPS",
@@ -87,18 +81,12 @@ const COLUMNAS_EXCEL = [
   "TOTAL","CLASIFICADOR"
 ];
 
-/* =========================================================
-   FIREBASE INIT
-   ========================================================= */
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const auth = getAuth(app);
 
-/* =========================================================
-   ESTADO
-   ========================================================= */
 const state = {
   fecha: new Date().toISOString().slice(0,10),
   proveedor: "", zona: "",
@@ -116,18 +104,13 @@ const catalogos = {
 let transaccionesCache = [];
 let unsubscribeTrans = null;
 
-/* =========================================================
-   UTILS
-   ========================================================= */
 function $(id) { return document.getElementById(id); }
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
-/* =========================================================
-   NOTIFICACIONES LATERALES
-   ========================================================= */
+/* ---------- TOASTS ---------- */
 function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
   let cont = document.getElementById("toast-container");
   if (!cont) {
@@ -200,9 +183,7 @@ function inyectarEstilosToast() {
   document.head.appendChild(s);
 }
 
-/* =========================================================
-   ARRANQUE
-   ========================================================= */
+/* ---------- ARRANQUE ---------- */
 (async function init() {
   try { await signInAnonymously(auth); console.log("[WRC] Auth OK"); }
   catch(e){ console.warn("[WRC] Auth:", e.code || e.message); }
@@ -239,9 +220,7 @@ function inyectarEstilosToast() {
   renderTodo();
 })();
 
-/* =========================================================
-   SEMILLA
-   ========================================================= */
+/* ---------- SEMILLA ---------- */
 async function sembrarSiHaceFalta() {
   const metaRef = doc(db, "meta", "config");
   let snap;
@@ -259,9 +238,7 @@ async function sembrarSiHaceFalta() {
   console.log("[WRC] Catálogos iniciales creados.");
 }
 
-/* =========================================================
-   LISTENERS
-   ========================================================= */
+/* ---------- LISTENERS ---------- */
 function escucharCatalogo(nombre) {
   onSnapshot(collection(db, nombre),
     (snap) => {
@@ -299,9 +276,7 @@ function escucharTransacciones(fecha) {
     (err) => console.error("[WRC] onSnapshot trans:", err.code, err.message));
 }
 
-/* =========================================================
-   RENDER
-   ========================================================= */
+/* ---------- RENDER ---------- */
 function renderTodo() {
   renderSelects();
   renderListas();
@@ -409,9 +384,7 @@ function renderTransacciones() {
   });
 }
 
-/* =========================================================
-   FUNCIONES GLOBALES
-   ========================================================= */
+/* ---------- GUARDAR ---------- */
 window.guardarRegistro = async function() {
   if (!state.proveedor)    return mostrarToast("Falta Proveedor", "Selecciona un proveedor.", "error");
   if (!state.zona)         return mostrarToast("Falta Zona", "Selecciona una zona.", "error");
@@ -478,9 +451,7 @@ window.borrarTodo = function() {
   renderPantalla();
 };
 
-/* =========================================================
-   MODALES
-   ========================================================= */
+/* ---------- MODALES ---------- */
 window.abrirAdmin = function() {
   state.pin = "";
   actualizarPinDots();
@@ -504,9 +475,7 @@ window.cerrarTransacciones = function() {
   document.getElementById("modalTransacciones").style.display = "none";
 };
 
-/* =========================================================
-   PIN
-   ========================================================= */
+/* ---------- PIN ---------- */
 function actualizarPinDots() {
   const dots = document.querySelectorAll("#pinDisplay .pin-dot");
   dots.forEach((d, i) => d.classList.toggle("lleno", i < state.pin.length));
@@ -542,9 +511,7 @@ window.borrarPin = function() {
   actualizarPinDots();
 };
 
-/* =========================================================
-   ADMIN
-   ========================================================= */
+/* ---------- ADMIN ---------- */
 window.actualizarVistaAdmin = function() {
   const cat = document.getElementById("adminCategoria").value;
   const ul = document.getElementById("adminListaActual");
@@ -595,9 +562,7 @@ window.agregarItemAdmin = async function() {
   } catch(e) { mostrarToast("Error", e.message, "error"); }
 };
 
-/* =========================================================
-   TRANSACCIONES: editar/eliminar
-   ========================================================= */
+/* ---------- EDITAR/ELIMINAR TRANSACCIONES ---------- */
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-accion]");
   if (!btn) return;
@@ -634,9 +599,7 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-/* =========================================================
-   EXCEL — 42 columnas exactas
-   ========================================================= */
+/* ---------- EXCEL 42 COLUMNAS ---------- */
 function partesFecha(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   const fecha = new Date(Date.UTC(y, m - 1, d));
@@ -721,9 +684,7 @@ function construirExcel(datos, etiquetaArchivo) {
   mostrarToast("Excel descargado", `${COLUMNAS_EXCEL.length} columnas · ${filas.length} filas`, "ok", 2500);
 }
 
-/* =========================================================
-   EXPORTAR POR RANGO DE FECHAS (botón 🗓️ inyectado)
-   ========================================================= */
+/* ---------- BOTÓN 🗓️ RANGO DE FECHAS ---------- */
 function inyectarEstilosRango() {
   if (document.getElementById("estilos-rango")) return;
   const s = document.createElement("style");
@@ -851,9 +812,7 @@ async function exportarRango(desde, hasta) {
   }
 }
 
-/* =========================================================
-   INDICADOR DE RED
-   ========================================================= */
+/* ---------- INDICADOR DE RED ---------- */
 function actualizarIndicadorSync() {
   const el = document.getElementById("sync-indicador");
   if (!el) return;
@@ -876,7 +835,4 @@ function actualizarIndicadorSync() {
 
 setInterval(actualizarIndicadorSync, 3000);
 
-/* =========================================================
-   FIN
-   ========================================================= */
 console.log("%cWRC Registro · Firebase v2.3","color:#e74c3c;font-weight:bold;font-size:12px");

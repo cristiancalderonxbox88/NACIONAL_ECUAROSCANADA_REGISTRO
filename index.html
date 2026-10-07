@@ -9,9 +9,6 @@
 </head>
 <body>
 
-    <!-- ============================================ -->
-    <!-- CABECERA -->
-    <!-- ============================================ -->
     <header>
         <div class="header-left">
             <input type="date" id="fecha" value="2026-10-06">
@@ -28,12 +25,8 @@
 </div>
     </header>
 
-    <!-- ============================================ -->
-    <!-- CONTENEDOR PRINCIPAL -->
-    <!-- ============================================ -->
     <div class="main-container">
         
-        <!-- COLUMNA 1: MESAS + CLASIFICADORES -->
         <div class="columna columna-dividida">
             <div class="sub-seccion">
                 <div class="columna-header">
@@ -58,7 +51,6 @@
             </div>
         </div>
 
-        <!-- COLUMNA 2: VARIEDADES -->
         <div class="columna">
             <div class="columna-header">
                 Variedades 
@@ -70,7 +62,6 @@
             <ul class="lista-items" id="lista-variedades"></ul>
         </div>
 
-        <!-- COLUMNA 3: PLAGAS -->
         <div class="columna">
             <div class="columna-header">
                 Plag/Enf 🔒
@@ -82,7 +73,6 @@
             <ul class="lista-items" id="lista-plagas"></ul>
         </div>
 
-        <!-- PANEL DERECHO: TECLADO -->
         <div class="panel-teclado">
             <div class="pantalla-numeros" id="pantalla">0</div>
             <div class="teclado-grid">
@@ -101,13 +91,8 @@
         </div>
     </div>
 
-    <!-- ============================================ -->
-    <!-- MODAL DE ADMINISTRACIÓN (CON PIN) -->
-    <!-- ============================================ -->
     <div id="modalAdmin" class="modal">
         <div class="modal-content modal-admin">
-            
-            <!-- VISTA 1: PANTALLA DE PIN -->
             <div id="vistaPin">
                 <div class="modal-header">
                     <h2>🔒 Acceso Restringido</h2>
@@ -142,7 +127,6 @@
                 </div>
             </div>
 
-            <!-- VISTA 2: PANEL DE ADMINISTRACIÓN -->
             <div id="vistaAdmin" style="display: none;">
                 <div class="modal-header">
                     <h2>⚙️ Administración de Datos</h2>
@@ -177,9 +161,6 @@
         </div>
     </div>
 
-    <!-- ============================================ -->
-    <!-- MODAL DE TRANSACCIONES -->
-    <!-- ============================================ -->
     <div id="modalTransacciones" class="modal">
         <div class="modal-content modal-transacciones">
             <div class="modal-header">
