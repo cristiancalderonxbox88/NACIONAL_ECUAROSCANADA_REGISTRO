@@ -1,6 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
-   Mismas funciones que el app.js original, solo cambia el backend
+   v2.1: Proveedor obligatorio + Notificaciones laterales + Indicador pendientes
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -23,13 +23,11 @@ const firebaseConfig = {
 
 const PIN_ADMIN = "1234";
 
-/* ---------- COLUMNAS BASE DEL EXCEL ---------- */
 const BASE_COLS = [
   "FECHA","PROVEEDOR","ZONA","MESA","CLASIFICADOR","VARIEDAD",
   "TOTAL DEFECTOS","N° REGISTROS","OBSERVACIONES"
 ];
 
-/* ---------- CATÁLOGOS SEMILLA ---------- */
 const DEFAULT_CATALOGOS = {
   proveedores: [
     "(05) QUIMBIAMBA CACUANGO PEDRO","(01) ECUAROSCANADA S.A.",
@@ -59,10 +57,12 @@ const DEFAULT_CATALOGOS = {
     "ACAROS","OIDIO","BOTRITIS","AFIDOS","VELLOSO","MAL DESYEME",
     "FITO TOXICIDAD","DEFIC. DE CALCIO","TALLOS CORTOS","P QUEMADOS",
     "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
-    "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
+    "INTOXICACIÓN","SIN FOLLAGE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
     "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
   ]
 };
+// Corrección tipográfica de semilla
+DEFAULT_CATALOGOS.plagas[25] = "SIN FOLLAJE";
 
 const CATS = ["proveedores","zonas","clasificadores","mesas","variedades","plagas"];
 const ETIQUETAS_CAT = {
@@ -70,14 +70,12 @@ const ETIQUETAS_CAT = {
   mesas:"Mesas", variedades:"Variedades", plagas:"Plagas"
 };
 
-/* ---------- FIREBASE ---------- */
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const auth = getAuth(app);
 
-/* ---------- ESTADO ---------- */
 const state = {
   fecha: new Date().toISOString().slice(0,10),
   proveedor: "", zona: "",
@@ -95,19 +93,47 @@ const catalogos = {
 let transaccionesCache = [];
 let unsubscribeTrans = null;
 
-/* ---------- UTILS ---------- */
 function $(id) { return document.getElementById(id); }
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
-/* Aviso simple con alert() para no modificar tu HTML ni CSS */
-function aviso(msg) { alert(msg); }
+/* =========================================================
+   NOTIFICACIONES LATERALES PROFESIONALES
+   ========================================================= */
+function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
+  let cont = document.getElementById("toast-container");
+  if (!cont) {
+    cont = document.createElement("div");
+    cont.id = "toast-container";
+    cont.className = "toast-container";
+    document.body.appendChild(cont);
+  }
 
-/* ---------- ARRANQUE ---------- */
+  const iconos = { ok:"✅", error:"⚠️", info:"ℹ️", warn:"⏳" };
+  const el = document.createElement("div");
+  el.className = "toast-item " + tipo;
+  el.innerHTML = `
+    <div class="toast-icono">${iconos[tipo] || "ℹ️"}</div>
+    <div class="toast-texto">
+      <div class="toast-titulo">${esc(titulo)}</div>
+      ${mensaje ? `<div class="toast-msg">${esc(mensaje)}</div>` : ""}
+    </div>`;
+
+  cont.appendChild(el);
+
+  setTimeout(() => {
+    el.classList.add("saliendo");
+    setTimeout(() => el.remove(), 260);
+  }, ms);
+}
+
+/* =========================================================
+   ARRANQUE
+   ========================================================= */
 (async function init() {
-  try { await signInAnonymously(auth); console.log("[WRC] Auth anónima OK"); }
+  try { await signInAnonymously(auth); console.log("[WRC] Auth OK"); }
   catch(e){ console.warn("[WRC] Auth:", e.code || e.message); }
 
   try { await sembrarSiHaceFalta(); }
@@ -116,24 +142,34 @@ function aviso(msg) { alert(msg); }
   CATS.forEach(escucharCatalogo);
   escucharTransacciones(state.fecha);
 
-  $("fecha").value = state.fecha;
-  $("fecha").addEventListener("change", (e) => {
-    state.fecha = e.target.value || new Date().toISOString().slice(0,10);
-    state.editandoId = null;
-    escucharTransacciones(state.fecha);
-  });
-
-  $("proveedor").addEventListener("change", (e) => { state.proveedor = e.target.value; });
-  $("zona").addEventListener("change",      (e) => { state.zona      = e.target.value; });
+  const f = $("fecha");
+  if (f) {
+    f.value = state.fecha;
+    f.addEventListener("change", (e) => {
+      state.fecha = e.target.value || new Date().toISOString().slice(0,10);
+      state.editandoId = null;
+      escucharTransacciones(state.fecha);
+    });
+  }
+  const p = $("proveedor"); if (p) p.addEventListener("change", e => state.proveedor = e.target.value);
+  const z = $("zona");      if (z) z.addEventListener("change", e => state.zona      = e.target.value);
 
   actualizarIndicadorSync();
-  window.addEventListener("online",  actualizarIndicadorSync);
-  window.addEventListener("offline", actualizarIndicadorSync);
+  window.addEventListener("online",  () => {
+    actualizarIndicadorSync();
+    mostrarToast("Conexión restaurada", "Sincronizando datos pendientes…", "ok");
+  });
+  window.addEventListener("offline", () => {
+    actualizarIndicadorSync();
+    mostrarToast("Sin conexión", "Los registros se guardarán localmente y se subirán al reconectar.", "warn", 4500);
+  });
 
   renderTodo();
 })();
 
-/* ---------- SEMILLA ---------- */
+/* =========================================================
+   SEMILLA INICIAL
+   ========================================================= */
 async function sembrarSiHaceFalta() {
   const metaRef = doc(db, "meta", "config");
   let snap;
@@ -151,7 +187,9 @@ async function sembrarSiHaceFalta() {
   console.log("[WRC] Catálogos iniciales creados.");
 }
 
-/* ---------- LISTENERS ---------- */
+/* =========================================================
+   LISTENERS
+   ========================================================= */
 function escucharCatalogo(nombre) {
   onSnapshot(collection(db, nombre),
     (snap) => {
@@ -162,8 +200,9 @@ function escucharCatalogo(nombre) {
           String(a.nombre).localeCompare(String(b.nombre), "es"));
       renderTodo();
       const modalAdmin = document.getElementById("modalAdmin");
+      const vistaAdmin = document.getElementById("vistaAdmin");
       if (modalAdmin && modalAdmin.style.display === "flex"
-          && document.getElementById("vistaAdmin").style.display !== "none") {
+          && vistaAdmin && vistaAdmin.style.display !== "none") {
         window.actualizarVistaAdmin();
       }
     },
@@ -183,11 +222,14 @@ function escucharTransacciones(fecha) {
           return tb - ta;
         });
       renderTransacciones();
+      actualizarIndicadorSync();
     },
-    (err) => console.error("[WRC] onSnapshot transacciones:", err.code, err.message));
+    (err) => console.error("[WRC] onSnapshot trans:", err.code, err.message));
 }
 
-/* ---------- RENDER ---------- */
+/* =========================================================
+   RENDER
+   ========================================================= */
 function renderTodo() {
   renderSelects();
   renderListas();
@@ -215,10 +257,10 @@ function llenarSelect(id, items, placeholder, valorActual) {
 }
 
 function renderListas() {
-  renderListaUL("lista-mesas",          catalogos.mesas,          state.mesa,          v => { state.mesa = (state.mesa===v)?"":v; renderListas(); });
-  renderListaUL("lista-clasificadores", catalogos.clasificadores, state.clasificador,  v => { state.clasificador = (state.clasificador===v)?"":v; renderListas(); });
-  renderListaUL("lista-variedades",     catalogos.variedades,     state.variedad,      v => { state.variedad = (state.variedad===v)?"":v; renderListas(); });
-  renderListaUL("lista-plagas",         catalogos.plagas,         state.plaga,         v => { state.plaga = (state.plaga===v)?"":v; renderListas(); });
+  renderListaUL("lista-mesas",          catalogos.mesas,          state.mesa,         v => { state.mesa = (state.mesa===v)?"":v; renderListas(); });
+  renderListaUL("lista-clasificadores", catalogos.clasificadores, state.clasificador, v => { state.clasificador = (state.clasificador===v)?"":v; renderListas(); });
+  renderListaUL("lista-variedades",     catalogos.variedades,     state.variedad,     v => { state.variedad = (state.variedad===v)?"":v; renderListas(); });
+  renderListaUL("lista-plagas",         catalogos.plagas,         state.plaga,        v => { state.plaga = (state.plaga===v)?"":v; renderListas(); });
 }
 
 function renderListaUL(ulId, items, seleccionado, onSelect) {
@@ -295,19 +337,25 @@ function renderTransacciones() {
   });
 }
 
-/* ---------- FUNCIONES LLAMADAS DESDE EL HTML ---------- */
+/* =========================================================
+   FUNCIONES GLOBALES
+   ========================================================= */
 window.guardarRegistro = async function() {
-  if (!state.mesa)         return aviso("Selecciona una MESA");
-  if (!state.clasificador) return aviso("Selecciona un CLASIFICADOR");
-  if (!state.variedad)     return aviso("Selecciona una VARIEDAD");
-  if (!state.plaga)        return aviso("Selecciona una PLAGA");
+  /* ---- VALIDACIONES (Proveedor ahora es obligatorio) ---- */
+  if (!state.proveedor)    return mostrarToast("Falta Proveedor", "Debes seleccionar un proveedor antes de continuar.", "error");
+  if (!state.mesa)         return mostrarToast("Falta Mesa", "Selecciona una mesa.", "error");
+  if (!state.clasificador) return mostrarToast("Falta Clasificador", "Selecciona un clasificador.", "error");
+  if (!state.variedad)     return mostrarToast("Falta Variedad", "Selecciona una variedad.", "error");
+  if (!state.plaga)        return mostrarToast("Falta Plaga", "Selecciona una plaga.", "error");
+
   const cant = parseInt(state.cantidad, 10);
-  if (!Number.isFinite(cant) || cant <= 0) return aviso("Ingresa una CANTIDAD");
+  if (!Number.isFinite(cant) || cant <= 0)
+    return mostrarToast("Cantidad inválida", "Ingresa una cantidad mayor a cero.", "error");
 
   try {
     await addDoc(collection(db, "transacciones"), {
       fecha:        state.fecha,
-      proveedor:    state.proveedor || "",
+      proveedor:    state.proveedor,
       zona:         state.zona || "",
       mesa:         state.mesa,
       clasificador: state.clasificador,
@@ -318,12 +366,25 @@ window.guardarRegistro = async function() {
       creado:       serverTimestamp(),
       actualizado:  serverTimestamp()
     });
+
+    /* Captura rápida: mesa, clasificador y proveedor se mantienen */
     state.variedad = ""; state.plaga = ""; state.cantidad = "";
     renderListas(); renderPantalla();
-    aviso("✔ Registro guardado");
+
+    const online = navigator.onLine;
+    if (online) {
+      mostrarToast("Transacción guardada",
+        `${state.mesa} · ${state.variedad || ""} · ${state.plaga || ""}`.trim() ||
+        "Registro enviado a la nube.",
+        "ok");
+    } else {
+      mostrarToast("Guardado localmente",
+        "Sin conexión. Se subirá automáticamente al reconectar.",
+        "warn", 4200);
+    }
   } catch(e) {
     console.error(e);
-    aviso("Error al guardar: " + e.message);
+    mostrarToast("Error al guardar", e.message, "error");
   }
 };
 
@@ -352,7 +413,6 @@ window.borrarTodo = function() {
   renderPantalla();
 };
 
-/* ---------- MODALES ---------- */
 window.abrirAdmin = function() {
   state.pin = "";
   actualizarPinDots();
@@ -376,7 +436,6 @@ window.cerrarTransacciones = function() {
   document.getElementById("modalTransacciones").style.display = "none";
 };
 
-/* ---------- PIN ---------- */
 function actualizarPinDots() {
   const dots = document.querySelectorAll("#pinDisplay .pin-dot");
   dots.forEach((d, i) => d.classList.toggle("lleno", i < state.pin.length));
@@ -412,7 +471,6 @@ window.borrarPin = function() {
   actualizarPinDots();
 };
 
-/* ---------- ADMIN ---------- */
 window.actualizarVistaAdmin = function() {
   const cat = document.getElementById("adminCategoria").value;
   const ul = document.getElementById("adminListaActual");
@@ -439,8 +497,8 @@ window.actualizarVistaAdmin = function() {
       if (!confirm(`¿Eliminar "${nombre}" de ${ETIQUETAS_CAT[cat2]}?`)) return;
       try {
         await deleteDoc(doc(db, cat2, id));
-        aviso("Elemento eliminado");
-      } catch(e) { aviso("Error: " + e.message); }
+        mostrarToast("Elemento eliminado", nombre, "ok", 2000);
+      } catch(e) { mostrarToast("Error", e.message, "error"); }
     });
   });
 };
@@ -449,21 +507,20 @@ window.agregarItemAdmin = async function() {
   const cat = document.getElementById("adminCategoria").value;
   const input = document.getElementById("adminInput");
   const nombre = input.value.trim().toUpperCase();
-  if (!nombre) return aviso("Escribe un nombre");
+  if (!nombre) return mostrarToast("Falta nombre", "Escribe un nombre para agregar.", "error");
 
   const yaExiste = (catalogos[cat] || []).some(i => String(i.nombre).toUpperCase() === nombre);
-  if (yaExiste) return aviso("Ya existe ese elemento");
+  if (yaExiste) return mostrarToast("Duplicado", "Ese elemento ya existe.", "error");
 
   try {
     await addDoc(collection(db, cat), {
       nombre, orden: (catalogos[cat] || []).length, activo: true
     });
     input.value = "";
-    aviso(`✔ Agregado a ${ETIQUETAS_CAT[cat]}`);
-  } catch(e) { aviso("Error: " + e.message); }
+    mostrarToast("Agregado", `${nombre} se añadió a ${ETIQUETAS_CAT[cat]}.`, "ok", 2200);
+  } catch(e) { mostrarToast("Error", e.message, "error"); }
 };
 
-/* ---------- TRANSACCIONES: editar/eliminar ---------- */
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-accion]");
   if (!btn) return;
@@ -475,8 +532,11 @@ document.addEventListener("click", async (e) => {
 
   if (accion === "del") {
     if (!confirm("¿Eliminar esta transacción? No se puede deshacer.")) return;
-    try { await deleteDoc(doc(db, "transacciones", id)); aviso("Transacción eliminada"); }
-    catch(e) { aviso("Error: " + e.message); }
+    try {
+      await deleteDoc(doc(db, "transacciones", id));
+      mostrarToast("Transacción eliminada", "", "ok", 2000);
+    }
+    catch(e) { mostrarToast("Error", e.message, "error"); }
     return;
   }
 
@@ -485,22 +545,21 @@ document.addEventListener("click", async (e) => {
     const variedad = tr.querySelector('[data-campo="variedad"]').value.trim();
     const plaga    = tr.querySelector('[data-campo="plaga"]').value.trim();
     const tallos   = parseInt(tr.querySelector('[data-campo="tallos"]').value, 10);
-    if (!variedad || !plaga) return aviso("Variedad y plaga obligatorias");
-    if (!Number.isFinite(tallos) || tallos <= 0) return aviso("Cantidad inválida");
+    if (!variedad || !plaga) return mostrarToast("Datos incompletos", "Variedad y plaga son obligatorias.", "error");
+    if (!Number.isFinite(tallos) || tallos <= 0) return mostrarToast("Cantidad inválida", "", "error");
     try {
       await updateDoc(doc(db, "transacciones", id), {
         variedad, plaga, tallos, actualizado: serverTimestamp()
       });
       state.editandoId = null;
-      aviso("✔ Actualizado");
-    } catch(e) { aviso("Error: " + e.message); }
+      mostrarToast("Actualizado", "Cambios guardados correctamente.", "ok", 2000);
+    } catch(e) { mostrarToast("Error", e.message, "error"); }
   }
 });
 
-/* ---------- EXCEL (42 columnas) ---------- */
 window.generarExcel = function() {
-  if (typeof XLSX === "undefined") return aviso("SheetJS no cargado");
-  if (!transaccionesCache.length)  return aviso("No hay transacciones para exportar");
+  if (typeof XLSX === "undefined") return mostrarToast("Falta SheetJS", "No se cargó la librería.", "error");
+  if (!transaccionesCache.length)  return mostrarToast("Sin datos", "No hay transacciones para exportar.", "error");
 
   const plagasCols = (catalogos.plagas.length
     ? catalogos.plagas.map(p => p.nombre)
@@ -565,15 +624,33 @@ window.generarExcel = function() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "CALIDAD");
   XLSX.writeFile(wb, `Registro_Calidad_${state.fecha}.xlsx`);
+  mostrarToast("Excel descargado", `${COLUMNAS.length} columnas generadas.`, "ok", 2500);
 };
 
-/* ---------- INDICADOR DE RED ---------- */
+/* =========================================================
+   INDICADOR DE RED + PENDIENTES
+   ========================================================= */
 function actualizarIndicadorSync() {
   const el = document.getElementById("sync-indicador");
   if (!el) return;
-  const on = navigator.onLine;
-  el.className = "sync-indicador " + (on ? "online" : "offline");
-  el.textContent = on ? "🟢 En línea" : "🔴 Sin conexión";
+
+  const pendientes = transaccionesCache.filter(t => t.pendiente).length;
+
+  if (!navigator.onLine) {
+    el.className = "sync-indicador offline";
+    el.textContent = pendientes > 0
+      ? `🔴 Sin conexión · ${pendientes} pendiente${pendientes===1?"":"s"}`
+      : "🔴 Sin conexión";
+  } else if (pendientes > 0) {
+    el.className = "sync-indicador sincronizando";
+    el.textContent = `🟡 Sincronizando ${pendientes}…`;
+  } else {
+    el.className = "sync-indicador online";
+    el.textContent = "🟢 En línea";
+  }
 }
 
-console.log("%cWRC Registro · Firebase","color:#e74c3c;font-weight:bold;font-size:12px");
+/* Actualizar el indicador cada 3 segundos por si cambian pendientes */
+setInterval(actualizarIndicadorSync, 3000);
+
+console.log("%cWRC Registro · Firebase v2.1","color:#e74c3c;font-weight:bold;font-size:12px");
