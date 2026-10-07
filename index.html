@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Registro Nacional - Calidad</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ============================================ -->
+    <!-- CABECERA -->
+    <!-- ============================================ -->
+    <header>
+        <div class="header-left">
+            <input type="date" id="fecha" value="2026-10-06">
+            <select id="proveedor"></select>
+            <select id="zona"></select>
+            
+            <button class="icon-btn" onclick="abrirAdmin()" title="Administrar Listas">⚙️</button>
+            <button class="icon-btn" onclick="abrirTransacciones()" title="Ver Transacciones">📋</button>
+            <button class="icon-btn" onclick="generarExcel()" title="Descargar Excel">🖨️</button>
+        </div>
+        <div class="header-right">
+            <button class="btn-guardar-rojo" onclick="guardarRegistro()">Guardar</button>
+            <button class="icon-btn">⋮</button>
+        </div>
+    </header>
+
+    <!-- ============================================ -->
+    <!-- CONTENEDOR PRINCIPAL -->
+    <!-- ============================================ -->
+    <div class="main-container">
+        
+        <!-- COLUMNA 1: MESAS + CLASIFICADORES -->
+        <div class="columna columna-dividida">
+            <div class="sub-seccion">
+                <div class="columna-header">
+                    Mesas 
+                    <span class="lupa-btn" onclick="toggleBuscador('buscador-mesas')">🔍</span>
+                </div>
+                <div class="buscador" id="buscador-mesas">
+                    <input type="text" placeholder="Buscar mesa..." oninput="filtrarLista('lista-mesas', this.value)">
+                </div>
+                <ul class="lista-items" id="lista-mesas"></ul>
+            </div>
+
+            <div class="sub-seccion">
+                <div class="columna-header">
+                    Clasificadores 
+                    <span class="lupa-btn" onclick="toggleBuscador('buscador-clasificadores')">🔍</span>
+                </div>
+                <div class="buscador" id="buscador-clasificadores">
+                    <input type="text" placeholder="Buscar clasificador..." oninput="filtrarLista('lista-clasificadores', this.value)">
+                </div>
+                <ul class="lista-items" id="lista-clasificadores"></ul>
+            </div>
+        </div>
+
+        <!-- COLUMNA 2: VARIEDADES -->
+        <div class="columna">
+            <div class="columna-header">
+                Variedades 
+                <span class="lupa-btn" onclick="toggleBuscador('buscador-variedades')">🔍</span>
+            </div>
+            <div class="buscador" id="buscador-variedades">
+                <input type="text" placeholder="Buscar variedad..." oninput="filtrarLista('lista-variedades', this.value)">
+            </div>
+            <ul class="lista-items" id="lista-variedades"></ul>
+        </div>
+
+        <!-- COLUMNA 3: PLAGAS -->
+        <div class="columna">
+            <div class="columna-header">
+                Plag/Enf 🔒
+                <span class="lupa-btn" onclick="toggleBuscador('buscador-plagas')">🔍</span>
+            </div>
+            <div class="buscador" id="buscador-plagas">
+                <input type="text" placeholder="Buscar plaga..." oninput="filtrarLista('lista-plagas', this.value)">
+            </div>
+            <ul class="lista-items" id="lista-plagas"></ul>
+        </div>
+
+        <!-- PANEL DERECHO: TECLADO -->
+        <div class="panel-teclado">
+            <div class="pantalla-numeros" id="pantalla">0</div>
+            <div class="teclado-grid">
+                <div class="tecla" onclick="presionarTecla('1')">1</div>
+                <div class="tecla" onclick="presionarTecla('2')">2</div>
+                <div class="tecla" onclick="presionarTecla('3')">3</div>
+                <div class="tecla" onclick="presionarTecla('4')">4</div>
+                <div class="tecla" onclick="presionarTecla('5')">5</div>
+                <div class="tecla" onclick="presionarTecla('6')">6</div>
+                <div class="tecla" onclick="presionarTecla('7')">7</div>
+                <div class="tecla" onclick="presionarTecla('8')">8</div>
+                <div class="tecla" onclick="presionarTecla('9')">9</div>
+                <div class="tecla borrar" onclick="borrarTodo()">Borrar</div>
+                <div class="tecla" onclick="presionarTecla('0')">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- MODAL DE ADMINISTRACIÓN (CON PIN) -->
+    <!-- ============================================ -->
+    <div id="modalAdmin" class="modal">
+        <div class="modal-content modal-admin">
+            
+            <!-- VISTA 1: PANTALLA DE PIN -->
+            <div id="vistaPin">
+                <div class="modal-header">
+                    <h2>🔒 Acceso Restringido</h2>
+                    <span class="close" onclick="cerrarAdmin()">&times;</span>
+                </div>
+                
+                <div class="pin-container">
+                    <p class="pin-mensaje">Ingresa el PIN de 4 dígitos</p>
+                    
+                    <div class="pin-display" id="pinDisplay">
+                        <span class="pin-dot"></span>
+                        <span class="pin-dot"></span>
+                        <span class="pin-dot"></span>
+                        <span class="pin-dot"></span>
+                    </div>
+
+                    <div class="pin-teclado">
+                        <div class="pin-tecla" onclick="presionarPin('1')">1</div>
+                        <div class="pin-tecla" onclick="presionarPin('2')">2</div>
+                        <div class="pin-tecla" onclick="presionarPin('3')">3</div>
+                        <div class="pin-tecla" onclick="presionarPin('4')">4</div>
+                        <div class="pin-tecla" onclick="presionarPin('5')">5</div>
+                        <div class="pin-tecla" onclick="presionarPin('6')">6</div>
+                        <div class="pin-tecla" onclick="presionarPin('7')">7</div>
+                        <div class="pin-tecla" onclick="presionarPin('8')">8</div>
+                        <div class="pin-tecla" onclick="presionarPin('9')">9</div>
+                        <div class="pin-tecla borrar-pin" onclick="borrarPin()">⌫</div>
+                        <div class="pin-tecla" onclick="presionarPin('0')">0</div>
+                    </div>
+
+                    <p class="pin-error" id="pinError"></p>
+                </div>
+            </div>
+
+            <!-- VISTA 2: PANEL DE ADMINISTRACIÓN (oculto hasta PIN correcto) -->
+            <div id="vistaAdmin" style="display: none;">
+                <div class="modal-header">
+                    <h2>⚙️ Administración de Datos</h2>
+                    <span class="close" onclick="cerrarAdmin()">&times;</span>
+                </div>
+                
+                <div class="form-group">
+                    <label>Categoría a modificar:</label>
+                    <select id="adminCategoria" onchange="actualizarVistaAdmin()">
+                        <option value="proveedores">Proveedores</option>
+                        <option value="zonas">Zonas</option>
+                        <option value="clasificadores">Clasificadores</option>
+                        <option value="mesas">Mesas</option>
+                        <option value="variedades">Variedades</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Nuevo Registro:</label>
+                    <input type="text" id="adminInput" placeholder="Escribe el nombre aquí...">
+                    <button class="btn-agregar" onclick="agregarItemAdmin()">➕ Agregar a la lista</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Registros actuales en esta categoría:</label>
+                    <div class="lista-admin">
+                        <ul id="adminListaActual"></ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- MODAL DE TRANSACCIONES -->
+    <!-- ============================================ -->
+    <div id="modalTransacciones" class="modal">
+        <div class="modal-content modal-transacciones">
+            <div class="modal-header">
+                <h2>📋 Transacciones Registradas</h2>
+                <span class="close" onclick="cerrarTransacciones()">&times;</span>
+            </div>
+            
+            <div class="transacciones-info">
+    <span id="contadorTransacciones">0 registros</span>
+</div>
+
+            <div class="tabla-transacciones-wrapper">
+                <table class="tabla-transacciones">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Proveedor</th>
+            <th>Mesa</th>
+            <th>Clasif.</th>
+            <th>Variedad</th>
+            <th>Plaga</th>
+            <th>Cant.</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody id="tablaTransaccionesBody"></tbody>
+</table>
+            </div>
+        </div>
+    </div>
+	<script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
