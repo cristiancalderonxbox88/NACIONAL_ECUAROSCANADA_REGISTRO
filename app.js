@@ -1,5 +1,6 @@
 /* =========================================================================
-   WRC · REGISTRO NACIONAL CALIDAD — v3.0 (Firebase + diseño original)
+   WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
+   Mismas funciones que el app.js original, solo cambia el backend
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -10,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
-/* ---------- CONFIGURACIÓN ---------- */
+/* ---------- CONFIGURACIÓN FIREBASE ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCDkDvFOHsEJvlbnHLyW2ppwjGLU4V-oAk",
   authDomain: "nacional-ecuaroscanada.firebaseapp.com",
@@ -22,7 +23,7 @@ const firebaseConfig = {
 
 const PIN_ADMIN = "1234";
 
-/* ---------- COLUMNAS BASE DEL EXCEL (9) + 33 PLAGAS = 42 ---------- */
+/* ---------- COLUMNAS BASE DEL EXCEL ---------- */
 const BASE_COLS = [
   "FECHA","PROVEEDOR","ZONA","MESA","CLASIFICADOR","VARIEDAD",
   "TOTAL DEFECTOS","N° REGISTROS","OBSERVACIONES"
@@ -101,24 +102,8 @@ function esc(s) {
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
-function toast(msg, tipo = "info", ms = 2600) {
-  let cont = document.getElementById("toasts");
-  if (!cont) {
-    cont = document.createElement("div");
-    cont.id = "toasts";
-    cont.className = "toasts";
-    document.body.appendChild(cont);
-  }
-  const el = document.createElement("div");
-  el.className = "toast " + tipo;
-  el.textContent = msg;
-  cont.appendChild(el);
-  setTimeout(() => {
-    el.style.transition = "opacity .25s";
-    el.style.opacity = "0";
-    setTimeout(() => el.remove(), 260);
-  }, ms);
-}
+/* Aviso simple con alert() para no modificar tu HTML ni CSS */
+function aviso(msg) { alert(msg); }
 
 /* ---------- ARRANQUE ---------- */
 (async function init() {
@@ -238,9 +223,6 @@ function renderListas() {
 
 function renderListaUL(ulId, items, seleccionado, onSelect) {
   const ul = $(ulId); if (!ul) return;
-  const inputBuscador = ul.parentElement.querySelector(".buscador input");
-  const filtro = (inputBuscador?.value || "").trim().toUpperCase();
-
   ul.innerHTML = "";
   if (!items.length) {
     const li = document.createElement("li");
@@ -249,25 +231,14 @@ function renderListaUL(ulId, items, seleccionado, onSelect) {
     ul.appendChild(li);
     return;
   }
-
-  let pintados = 0;
   items.forEach(it => {
     const nombre = it.nombre ?? it;
-    if (filtro && !String(nombre).toUpperCase().includes(filtro)) return;
-    pintados++;
     const li = document.createElement("li");
     if (seleccionado === nombre) li.classList.add("active");
     li.textContent = nombre;
     li.addEventListener("click", () => onSelect(nombre));
     ul.appendChild(li);
   });
-
-  if (!pintados) {
-    const li = document.createElement("li");
-    li.style.cssText = "color:#999;font-style:italic;justify-content:center;";
-    li.textContent = "Sin resultados";
-    ul.appendChild(li);
-  }
 }
 
 function renderPantalla() {
@@ -324,14 +295,14 @@ function renderTransacciones() {
   });
 }
 
-/* ---------- FUNCIONES GLOBALES (las que llama el HTML) ---------- */
+/* ---------- FUNCIONES LLAMADAS DESDE EL HTML ---------- */
 window.guardarRegistro = async function() {
-  if (!state.mesa)         return toast("Selecciona una MESA", "error");
-  if (!state.clasificador) return toast("Selecciona un CLASIFICADOR", "error");
-  if (!state.variedad)     return toast("Selecciona una VARIEDAD", "error");
-  if (!state.plaga)        return toast("Selecciona una PLAGA", "error");
+  if (!state.mesa)         return aviso("Selecciona una MESA");
+  if (!state.clasificador) return aviso("Selecciona un CLASIFICADOR");
+  if (!state.variedad)     return aviso("Selecciona una VARIEDAD");
+  if (!state.plaga)        return aviso("Selecciona una PLAGA");
   const cant = parseInt(state.cantidad, 10);
-  if (!Number.isFinite(cant) || cant <= 0) return toast("Ingresa una CANTIDAD", "error");
+  if (!Number.isFinite(cant) || cant <= 0) return aviso("Ingresa una CANTIDAD");
 
   try {
     await addDoc(collection(db, "transacciones"), {
@@ -347,13 +318,12 @@ window.guardarRegistro = async function() {
       creado:       serverTimestamp(),
       actualizado:  serverTimestamp()
     });
-    // Captura rápida: mesa y clasificador se mantienen
     state.variedad = ""; state.plaga = ""; state.cantidad = "";
     renderListas(); renderPantalla();
-    toast("✔ Registro guardado", "ok", 1400);
+    aviso("✔ Registro guardado");
   } catch(e) {
     console.error(e);
-    toast("Error al guardar: " + e.message, "error", 4000);
+    aviso("Error al guardar: " + e.message);
   }
 };
 
@@ -469,8 +439,8 @@ window.actualizarVistaAdmin = function() {
       if (!confirm(`¿Eliminar "${nombre}" de ${ETIQUETAS_CAT[cat2]}?`)) return;
       try {
         await deleteDoc(doc(db, cat2, id));
-        toast("Elemento eliminado", "ok", 1400);
-      } catch(e) { toast("Error: " + e.message, "error"); }
+        aviso("Elemento eliminado");
+      } catch(e) { aviso("Error: " + e.message); }
     });
   });
 };
@@ -479,18 +449,18 @@ window.agregarItemAdmin = async function() {
   const cat = document.getElementById("adminCategoria").value;
   const input = document.getElementById("adminInput");
   const nombre = input.value.trim().toUpperCase();
-  if (!nombre) return toast("Escribe un nombre", "error");
+  if (!nombre) return aviso("Escribe un nombre");
 
   const yaExiste = (catalogos[cat] || []).some(i => String(i.nombre).toUpperCase() === nombre);
-  if (yaExiste) return toast("Ya existe ese elemento", "error");
+  if (yaExiste) return aviso("Ya existe ese elemento");
 
   try {
     await addDoc(collection(db, cat), {
       nombre, orden: (catalogos[cat] || []).length, activo: true
     });
     input.value = "";
-    toast(`✔ Agregado a ${ETIQUETAS_CAT[cat]}`, "ok", 1400);
-  } catch(e) { toast("Error: " + e.message, "error"); }
+    aviso(`✔ Agregado a ${ETIQUETAS_CAT[cat]}`);
+  } catch(e) { aviso("Error: " + e.message); }
 };
 
 /* ---------- TRANSACCIONES: editar/eliminar ---------- */
@@ -505,8 +475,8 @@ document.addEventListener("click", async (e) => {
 
   if (accion === "del") {
     if (!confirm("¿Eliminar esta transacción? No se puede deshacer.")) return;
-    try { await deleteDoc(doc(db, "transacciones", id)); toast("Transacción eliminada", "ok", 1400); }
-    catch(e) { toast("Error: " + e.message, "error"); }
+    try { await deleteDoc(doc(db, "transacciones", id)); aviso("Transacción eliminada"); }
+    catch(e) { aviso("Error: " + e.message); }
     return;
   }
 
@@ -515,22 +485,22 @@ document.addEventListener("click", async (e) => {
     const variedad = tr.querySelector('[data-campo="variedad"]').value.trim();
     const plaga    = tr.querySelector('[data-campo="plaga"]').value.trim();
     const tallos   = parseInt(tr.querySelector('[data-campo="tallos"]').value, 10);
-    if (!variedad || !plaga) return toast("Variedad y plaga obligatorias", "error");
-    if (!Number.isFinite(tallos) || tallos <= 0) return toast("Cantidad inválida", "error");
+    if (!variedad || !plaga) return aviso("Variedad y plaga obligatorias");
+    if (!Number.isFinite(tallos) || tallos <= 0) return aviso("Cantidad inválida");
     try {
       await updateDoc(doc(db, "transacciones", id), {
         variedad, plaga, tallos, actualizado: serverTimestamp()
       });
       state.editandoId = null;
-      toast("✔ Actualizado", "ok", 1400);
-    } catch(e) { toast("Error: " + e.message, "error"); }
+      aviso("✔ Actualizado");
+    } catch(e) { aviso("Error: " + e.message); }
   }
 });
 
 /* ---------- EXCEL (42 columnas) ---------- */
 window.generarExcel = function() {
-  if (typeof XLSX === "undefined") return toast("SheetJS no cargado", "error");
-  if (!transaccionesCache.length)  return toast("No hay transacciones para exportar", "error");
+  if (typeof XLSX === "undefined") return aviso("SheetJS no cargado");
+  if (!transaccionesCache.length)  return aviso("No hay transacciones para exportar");
 
   const plagasCols = (catalogos.plagas.length
     ? catalogos.plagas.map(p => p.nombre)
@@ -595,7 +565,6 @@ window.generarExcel = function() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "CALIDAD");
   XLSX.writeFile(wb, `Registro_Calidad_${state.fecha}.xlsx`);
-  toast(`📊 Excel (${COLUMNAS.length} columnas)`, "ok", 2600);
 };
 
 /* ---------- INDICADOR DE RED ---------- */
@@ -607,4 +576,4 @@ function actualizarIndicadorSync() {
   el.textContent = on ? "🟢 En línea" : "🔴 Sin conexión";
 }
 
-console.log("%cWRC Registro · v3.0 (Firebase)","color:#e74c3c;font-weight:bold;font-size:12px");
+console.log("%cWRC Registro · Firebase","color:#e74c3c;font-weight:bold;font-size:12px");
