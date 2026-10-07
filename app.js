@@ -62,7 +62,7 @@ let adminDesbloqueado = false;
 /* INDEXEDDB */
 /* ============================================ */
 const DB_NAME = 'WRC_RegistroCalidad';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_TX = 'transacciones';
 const STORE_CONFIG = 'config';
 let db = null;
@@ -72,9 +72,16 @@ function abrirDB() {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (e) => {
             const d = e.target.result;
+            let store;
             if (!d.objectStoreNames.contains(STORE_TX)) {
-                const store = d.createObjectStore(STORE_TX, { keyPath: 'id', autoIncrement: true });
+                store = d.createObjectStore(STORE_TX, { keyPath: 'id', autoIncrement: true });
+            } else {
+                store = e.target.transaction.objectStore(STORE_TX);
+            }
+            if (!store.indexNames.contains('sincronizada')) {
                 store.createIndex('sincronizada', 'sincronizada', { unique: false });
+            }
+            if (!store.indexNames.contains('uuid')) {
                 store.createIndex('uuid', 'uuid', { unique: true });
             }
             if (!d.objectStoreNames.contains(STORE_CONFIG)) {
@@ -85,7 +92,6 @@ function abrirDB() {
         req.onerror = (e) => reject(e.target.error);
     });
 }
-
 function dbGuardarTransaccion(tx) {
     return new Promise((resolve, reject) => {
         const t = db.transaction(STORE_TX, 'readwrite');
