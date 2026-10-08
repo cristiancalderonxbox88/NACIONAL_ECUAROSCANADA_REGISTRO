@@ -1,6 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
-   v2.3: Sin botón 🖨️ + ZONA obligatoria + 🗓️ rango de fechas
+   v3.0: Proveedores como lista + botón Guardar grande + sin Mesas/Zonas
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -25,15 +25,16 @@ const firebaseConfig = {
 
 const PIN_ADMIN = "1234";
 
+/* =========================================================
+   CATÁLOGOS SEMILLA
+   ========================================================= */
 const DEFAULT_CATALOGOS = {
   proveedores: [
     "(05) QUIMBIAMBA CACUANGO PEDRO","(01) ECUAROSCANADA S.A.",
     "(02) GRACE MESA","(03) HERNAN CABASCANGO",
     "(04) ESTACIO CACHIPUENDO NATHALY SILVANA"
   ],
-  zonas: ["1","2"],
   clasificadores: ["JM","Y","M","C","J","D","J-Y-D-JM","JM-D"],
-  mesas: ["M1 CE","M2 AM","M3 VE","M4 RO","M5 MO","M6 NA","PETALOS"],
   variedades: [
     "AMNESIA","ARTC","ATMC","BLSH","BRIGHTON","CANDLELIGHT","CARPE DIEM",
     "COFFE BREAK","COLOR","COTTON XPRESSION","COUNTRY BLUES","DARK PINK ROSE",
@@ -59,10 +60,10 @@ const DEFAULT_CATALOGOS = {
   ]
 };
 
-const CATS = ["proveedores","zonas","clasificadores","mesas","variedades","plagas"];
+const CATS = ["proveedores","clasificadores","variedades","plagas"];
 const ETIQUETAS_CAT = {
-  proveedores:"Proveedores", zonas:"Zonas", clasificadores:"Clasificadores",
-  mesas:"Mesas", variedades:"Variedades", plagas:"Plagas"
+  proveedores:"Proveedores", clasificadores:"Clasificadores",
+  variedades:"Variedades", plagas:"Plagas"
 };
 
 const PLAGAS_ORDEN = [
@@ -75,42 +76,54 @@ const PLAGAS_ORDEN = [
   "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
 ];
 
+/* ---------- EXCEL: FECHA | AÑO | MES | SEMANA | DIA | PROVEEDOR | VARIEDAD | [33 plagas] | TOTAL | CLASIFICADOR ---------- */
 const COLUMNAS_EXCEL = [
-  "FECHA","AÑO","MES","SEMANA","DIA","ZONA","VARIEDAD",
+  "FECHA","AÑO","MES","SEMANA","DIA","PROVEEDOR","VARIEDAD",
   ...PLAGAS_ORDEN,
   "TOTAL","CLASIFICADOR"
 ];
 
+/* =========================================================
+   FIREBASE INIT
+   ========================================================= */
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const auth = getAuth(app);
 
+/* =========================================================
+   ESTADO
+   ========================================================= */
 const state = {
   fecha: new Date().toISOString().slice(0,10),
-  proveedor: "", zona: "",
-  mesa: "", clasificador: "", variedad: "", plaga: "",
+  proveedor: "",
+  clasificador: "", variedad: "", plaga: "",
   cantidad: "",
   pin: "",
   editandoId: null
 };
 
 const catalogos = {
-  proveedores: [], zonas: [], clasificadores: [],
-  mesas: [], variedades: [], plagas: []
+  proveedores: [], clasificadores: [],
+  variedades: [], plagas: []
 };
 
 let transaccionesCache = [];
 let unsubscribeTrans = null;
 
+/* =========================================================
+   UTILS
+   ========================================================= */
 function $(id) { return document.getElementById(id); }
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
-/* ---------- TOASTS ---------- */
+/* =========================================================
+   NOTIFICACIONES
+   ========================================================= */
 function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
   let cont = document.getElementById("toast-container");
   if (!cont) {
@@ -183,7 +196,9 @@ function inyectarEstilosToast() {
   document.head.appendChild(s);
 }
 
-/* ---------- ARRANQUE ---------- */
+/* =========================================================
+   ARRANQUE
+   ========================================================= */
 (async function init() {
   try { await signInAnonymously(auth); console.log("[WRC] Auth OK"); }
   catch(e){ console.warn("[WRC] Auth:", e.code || e.message); }
@@ -203,8 +218,6 @@ function inyectarEstilosToast() {
       escucharTransacciones(state.fecha);
     });
   }
-  const p = $("proveedor"); if (p) p.addEventListener("change", e => state.proveedor = e.target.value);
-  const z = $("zona");      if (z) z.addEventListener("change", e => state.zona      = e.target.value);
 
   actualizarIndicadorSync();
   window.addEventListener("online", () => {
@@ -220,7 +233,9 @@ function inyectarEstilosToast() {
   renderTodo();
 })();
 
-/* ---------- SEMILLA ---------- */
+/* =========================================================
+   SEMILLA (solo si meta/config no existe)
+   ========================================================= */
 async function sembrarSiHaceFalta() {
   const metaRef = doc(db, "meta", "config");
   let snap;
@@ -238,7 +253,9 @@ async function sembrarSiHaceFalta() {
   console.log("[WRC] Catálogos iniciales creados.");
 }
 
-/* ---------- LISTENERS ---------- */
+/* =========================================================
+   LISTENERS
+   ========================================================= */
 function escucharCatalogo(nombre) {
   onSnapshot(collection(db, nombre),
     (snap) => {
@@ -276,38 +293,19 @@ function escucharTransacciones(fecha) {
     (err) => console.error("[WRC] onSnapshot trans:", err.code, err.message));
 }
 
-/* ---------- RENDER ---------- */
+/* =========================================================
+   RENDER
+   ========================================================= */
 function renderTodo() {
-  renderSelects();
   renderListas();
   renderPantalla();
 }
 
-function renderSelects() {
-  llenarSelect("proveedor", catalogos.proveedores, "Seleccione Proveedor", state.proveedor);
-  llenarSelect("zona",      catalogos.zonas,       "Zona",                state.zona);
-}
-
-function llenarSelect(id, items, placeholder, valorActual) {
-  const sel = $(id); if (!sel) return;
-  const previo = valorActual || sel.value;
-  sel.innerHTML = "";
-  const o0 = document.createElement("option"); o0.value = ""; o0.textContent = placeholder;
-  sel.appendChild(o0);
-  items.forEach(it => {
-    const o = document.createElement("option");
-    o.value = it.nombre; o.textContent = it.nombre;
-    sel.appendChild(o);
-  });
-  sel.value = previo;
-  if (sel.value !== previo) sel.value = "";
-}
-
 function renderListas() {
-  renderListaUL("lista-mesas",          catalogos.mesas,          state.mesa,         v => { state.mesa = (state.mesa===v)?"":v; renderListas(); });
+  renderListaUL("lista-proveedores",    catalogos.proveedores,    state.proveedor,    v => { state.proveedor    = (state.proveedor===v)?"":v;    renderListas(); });
   renderListaUL("lista-clasificadores", catalogos.clasificadores, state.clasificador, v => { state.clasificador = (state.clasificador===v)?"":v; renderListas(); });
-  renderListaUL("lista-variedades",     catalogos.variedades,     state.variedad,     v => { state.variedad = (state.variedad===v)?"":v; renderListas(); });
-  renderListaUL("lista-plagas",         catalogos.plagas,         state.plaga,        v => { state.plaga = (state.plaga===v)?"":v; renderListas(); });
+  renderListaUL("lista-variedades",     catalogos.variedades,     state.variedad,     v => { state.variedad     = (state.variedad===v)?"":v;     renderListas(); });
+  renderListaUL("lista-plagas",         catalogos.plagas,         state.plaga,        v => { state.plaga        = (state.plaga===v)?"":v;        renderListas(); });
 }
 
 function renderListaUL(ulId, items, seleccionado, onSelect) {
@@ -343,7 +341,7 @@ function renderTransacciones() {
   tbody.innerHTML = "";
 
   if (!transaccionesCache.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="sin-registros">Sin transacciones para esta fecha</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="sin-registros">Sin transacciones para esta fecha</td></tr>`;
     return;
   }
 
@@ -356,7 +354,6 @@ function renderTransacciones() {
         <td>${i+1}</td>
         <td>${esc(t.fecha)}</td>
         <td>${esc(t.proveedor||"—")}</td>
-        <td>${esc(t.mesa)}</td>
         <td>${esc(t.clasificador)}</td>
         <td><input data-campo="variedad" value="${esc(t.variedad)}" style="width:120px;padding:4px;border:1px solid #1976d2;border-radius:3px;"></td>
         <td><input data-campo="plaga"    value="${esc(t.plaga)}"    style="width:120px;padding:4px;border:1px solid #1976d2;border-radius:3px;"></td>
@@ -370,7 +367,6 @@ function renderTransacciones() {
         <td>${i+1}</td>
         <td>${esc(t.fecha)}</td>
         <td>${esc(t.proveedor||"—")}</td>
-        <td>${esc(t.mesa)}</td>
         <td>${esc(t.clasificador)}</td>
         <td>${esc(t.variedad)}</td>
         <td>${esc(t.plaga)}</td>
@@ -384,11 +380,11 @@ function renderTransacciones() {
   });
 }
 
-/* ---------- GUARDAR ---------- */
+/* =========================================================
+   GUARDAR
+   ========================================================= */
 window.guardarRegistro = async function() {
   if (!state.proveedor)    return mostrarToast("Falta Proveedor", "Selecciona un proveedor.", "error");
-  if (!state.zona)         return mostrarToast("Falta Zona", "Selecciona una zona.", "error");
-  if (!state.mesa)         return mostrarToast("Falta Mesa", "Selecciona una mesa.", "error");
   if (!state.clasificador) return mostrarToast("Falta Clasificador", "Selecciona un clasificador.", "error");
   if (!state.variedad)     return mostrarToast("Falta Variedad", "Selecciona una variedad.", "error");
   if (!state.plaga)        return mostrarToast("Falta Plaga", "Selecciona una plaga.", "error");
@@ -401,8 +397,6 @@ window.guardarRegistro = async function() {
     await addDoc(collection(db, "transacciones"), {
       fecha:        state.fecha,
       proveedor:    state.proveedor,
-      zona:         state.zona,
-      mesa:         state.mesa,
       clasificador: state.clasificador,
       variedad:     state.variedad,
       plaga:        state.plaga,
@@ -416,7 +410,7 @@ window.guardarRegistro = async function() {
     renderListas(); renderPantalla();
 
     if (navigator.onLine) {
-      mostrarToast("Transacción guardada", `${state.mesa} · ${state.clasificador}`, "ok");
+      mostrarToast("Transacción guardada", `${state.proveedor} · ${state.clasificador}`, "ok");
     } else {
       mostrarToast("Guardado localmente", "Sin conexión. Se subirá al reconectar.", "warn", 4200);
     }
@@ -451,7 +445,9 @@ window.borrarTodo = function() {
   renderPantalla();
 };
 
-/* ---------- MODALES ---------- */
+/* =========================================================
+   MODALES
+   ========================================================= */
 window.abrirAdmin = function() {
   state.pin = "";
   actualizarPinDots();
@@ -475,7 +471,9 @@ window.cerrarTransacciones = function() {
   document.getElementById("modalTransacciones").style.display = "none";
 };
 
-/* ---------- PIN ---------- */
+/* =========================================================
+   PIN
+   ========================================================= */
 function actualizarPinDots() {
   const dots = document.querySelectorAll("#pinDisplay .pin-dot");
   dots.forEach((d, i) => d.classList.toggle("lleno", i < state.pin.length));
@@ -511,7 +509,9 @@ window.borrarPin = function() {
   actualizarPinDots();
 };
 
-/* ---------- ADMIN ---------- */
+/* =========================================================
+   ADMIN
+   ========================================================= */
 window.actualizarVistaAdmin = function() {
   const cat = document.getElementById("adminCategoria").value;
   const ul = document.getElementById("adminListaActual");
@@ -562,7 +562,9 @@ window.agregarItemAdmin = async function() {
   } catch(e) { mostrarToast("Error", e.message, "error"); }
 };
 
-/* ---------- EDITAR/ELIMINAR TRANSACCIONES ---------- */
+/* =========================================================
+   EDITAR/ELIMINAR TRANSACCIONES
+   ========================================================= */
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-accion]");
   if (!btn) return;
@@ -599,7 +601,9 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-/* ---------- EXCEL 42 COLUMNAS ---------- */
+/* =========================================================
+   EXCEL (42 columnas)
+   ========================================================= */
 function partesFecha(iso) {
   const [y, m, d] = iso.split("-").map(Number);
   const fecha = new Date(Date.UTC(y, m - 1, d));
@@ -621,13 +625,13 @@ function construirExcel(datos, etiquetaArchivo) {
   const grupos = new Map();
 
   datos.forEach(t => {
-    const key = [t.fecha, t.zona || "", t.variedad || "", t.clasificador || ""].join("¦");
+    const key = [t.fecha, t.proveedor || "", t.variedad || "", t.clasificador || ""].join("¦");
     if (!grupos.has(key)) {
       const f = partesFecha(t.fecha);
       const fila = {
         FECHA: t.fecha || "",
         "AÑO": f.anio, MES: f.mes, SEMANA: f.semana, DIA: f.dia,
-        ZONA: t.zona || "",
+        PROVEEDOR: t.proveedor || "",
         VARIEDAD: t.variedad || "",
         CLASIFICADOR: t.clasificador || ""
       };
@@ -644,7 +648,7 @@ function construirExcel(datos, etiquetaArchivo) {
   [...grupos.values()]
     .sort((a, b) =>
       String(a.FECHA).localeCompare(String(b.FECHA)) ||
-      String(a.ZONA).localeCompare(String(b.ZONA), "es") ||
+      String(a.PROVEEDOR).localeCompare(String(b.PROVEEDOR), "es") ||
       String(a.VARIEDAD).localeCompare(String(b.VARIEDAD), "es") ||
       String(a.CLASIFICADOR).localeCompare(String(b.CLASIFICADOR), "es"))
     .forEach(f => {
@@ -670,7 +674,7 @@ function construirExcel(datos, etiquetaArchivo) {
     if (c === "MES") return { wch: 11 };
     if (c === "SEMANA") return { wch: 9 };
     if (c === "DIA") return { wch: 11 };
-    if (c === "ZONA") return { wch: 7 };
+    if (c === "PROVEEDOR") return { wch: 34 };
     if (c === "VARIEDAD") return { wch: 24 };
     if (c === "CLASIFICADOR") return { wch: 14 };
     if (c === "TOTAL") return { wch: 9 };
@@ -684,7 +688,9 @@ function construirExcel(datos, etiquetaArchivo) {
   mostrarToast("Excel descargado", `${COLUMNAS_EXCEL.length} columnas · ${filas.length} filas`, "ok", 2500);
 }
 
-/* ---------- BOTÓN 🗓️ RANGO DE FECHAS ---------- */
+/* =========================================================
+   BOTÓN 🗓️ RANGO DE FECHAS
+   ========================================================= */
 function inyectarEstilosRango() {
   if (document.getElementById("estilos-rango")) return;
   const s = document.createElement("style");
@@ -812,7 +818,9 @@ async function exportarRango(desde, hasta) {
   }
 }
 
-/* ---------- INDICADOR DE RED ---------- */
+/* =========================================================
+   INDICADOR DE RED
+   ========================================================= */
 function actualizarIndicadorSync() {
   const el = document.getElementById("sync-indicador");
   if (!el) return;
@@ -835,4 +843,4 @@ function actualizarIndicadorSync() {
 
 setInterval(actualizarIndicadorSync, 3000);
 
-console.log("%cWRC Registro · Firebase v2.3","color:#e74c3c;font-weight:bold;font-size:12px");
+console.log("%cWRC Registro · Firebase v3.0","color:#e74c3c;font-weight:bold;font-size:12px");
