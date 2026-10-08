@@ -1,6 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
-   v3.0: Proveedores como lista + botón Guardar grande + sin Mesas/Zonas
+   v3.1: Carga robusta de catálogos (getDocs + onSnapshot)
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
@@ -11,9 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
-/* =========================================================
-   CONFIGURACIÓN FIREBASE
-   ========================================================= */
+/* ---------- CONFIGURACIÓN FIREBASE ---------- */
 const firebaseConfig = {
   apiKey: "AIzaSyCDkDvFOHsEJvlbnHLyW2ppwjGLU4V-oAk",
   authDomain: "nacional-ecuaroscanada.firebaseapp.com",
@@ -25,9 +23,7 @@ const firebaseConfig = {
 
 const PIN_ADMIN = "1234";
 
-/* =========================================================
-   CATÁLOGOS SEMILLA
-   ========================================================= */
+/* ---------- CATÁLOGOS SEMILLA ---------- */
 const DEFAULT_CATALOGOS = {
   proveedores: [
     "(05) QUIMBIAMBA CACUANGO PEDRO","(01) ECUAROSCANADA S.A.",
@@ -76,25 +72,20 @@ const PLAGAS_ORDEN = [
   "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
 ];
 
-/* ---------- EXCEL: FECHA | AÑO | MES | SEMANA | DIA | PROVEEDOR | VARIEDAD | [33 plagas] | TOTAL | CLASIFICADOR ---------- */
 const COLUMNAS_EXCEL = [
   "FECHA","AÑO","MES","SEMANA","DIA","PROVEEDOR","VARIEDAD",
   ...PLAGAS_ORDEN,
   "TOTAL","CLASIFICADOR"
 ];
 
-/* =========================================================
-   FIREBASE INIT
-   ========================================================= */
+/* ---------- FIREBASE INIT ---------- */
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const auth = getAuth(app);
 
-/* =========================================================
-   ESTADO
-   ========================================================= */
+/* ---------- ESTADO ---------- */
 const state = {
   fecha: new Date().toISOString().slice(0,10),
   proveedor: "",
@@ -112,18 +103,14 @@ const catalogos = {
 let transaccionesCache = [];
 let unsubscribeTrans = null;
 
-/* =========================================================
-   UTILS
-   ========================================================= */
+/* ---------- UTILS ---------- */
 function $(id) { return document.getElementById(id); }
 function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
-/* =========================================================
-   NOTIFICACIONES
-   ========================================================= */
+/* ---------- TOASTS ---------- */
 function mostrarToast(titulo, mensaje = "", tipo = "ok", ms = 3200) {
   let cont = document.getElementById("toast-container");
   if (!cont) {
@@ -197,6 +184,59 @@ function inyectarEstilosToast() {
 }
 
 /* =========================================================
+   CARGA ROBUSTA DE CATÁLOGOS
+   Primero getDocs (confiable) + luego onSnapshot (tiempo real)
+   ========================================================= */
+async function cargarCatalogo(nombre) {
+  // 1) Carga inicial con getDocs
+  try {
+    const snap = await getDocs(collection(db, nombre));
+    aplicarCatalogo(nombre, snap);
+    console.log(`[WRC] ${nombre}: ${snap.size} docs`);
+  } catch(e) {
+    console.error(`[WRC] getDocs ${nombre}:`, e.code, e.message);
+  }
+
+  // 2) Listener en tiempo real
+  try {
+    onSnapshot(collection(db, nombre),
+      (snap) => { aplicarCatalogo(nombre, snap); },
+      (err) => {
+        console.warn(`[WRC] onSnapshot ${nombre}:`, err.code, err.message);
+      }
+    );
+  } catch(e) {
+    console.warn(`[WRC] onSnapshot ${nombre} catch:`, e.message);
+  }
+}
+
+function aplicarCatalogo(nombre, snap) {
+  const nuevos = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a,b) =>
+      (a.orden ?? 9999) - (b.orden ?? 9999) ||
+      String(a.nombre || "").localeCompare(String(b.nombre || ""), "es"));
+
+  // Solo re-renderizar si cambió (evita parpadeos)
+  const anterior = JSON.stringify(catalogos[nombre]?.map(x => x.id).sort());
+  const nuevo    = JSON.stringify(nuevos.map(x => x.id).sort());
+
+  catalogos[nombre] = nuevos;
+
+  if (anterior !== nuevo) {
+    renderListas();
+  }
+
+  // Si el admin está abierto, refrescar su vista
+  const modalAdmin = document.getElementById("modalAdmin");
+  const vistaAdmin = document.getElementById("vistaAdmin");
+  if (modalAdmin && modalAdmin.style.display === "flex"
+      && vistaAdmin && vistaAdmin.style.display !== "none") {
+    window.actualizarVistaAdmin();
+  }
+}
+
+/* =========================================================
    ARRANQUE
    ========================================================= */
 (async function init() {
@@ -206,7 +246,10 @@ function inyectarEstilosToast() {
   try { await sembrarSiHaceFalta(); }
   catch(e){ console.error("[WRC] Seed:", e); }
 
-  CATS.forEach(escucharCatalogo);
+  // Cargar catálogos (getDocs + onSnapshot)
+  CATS.forEach(cargarCatalogo);
+
+  // Transacciones
   escucharTransacciones(state.fecha);
 
   const f = $("fecha");
@@ -234,47 +277,49 @@ function inyectarEstilosToast() {
 })();
 
 /* =========================================================
-   SEMILLA (solo si meta/config no existe)
+   SEMILLA (auto-repara colecciones vacías)
    ========================================================= */
 async function sembrarSiHaceFalta() {
   const metaRef = doc(db, "meta", "config");
   let snap;
   try { snap = await getDoc(metaRef); } catch(e){ return; }
-  if (snap.exists() && snap.data().seeded) return;
+
+  const yaSembrado = snap.exists() && snap.data().seeded;
+
+  // Revisar colecciones vacías
+  const faltantes = [];
+  for (const col of Object.keys(DEFAULT_CATALOGOS)) {
+    try {
+      const colSnap = await getDocs(collection(db, col));
+      if (colSnap.empty) faltantes.push(col);
+    } catch(e) { /* sin permiso, ignorar */ }
+  }
+
+  if (yaSembrado && faltantes.length === 0) return;
+
+  if (faltantes.length === 0) {
+    if (!yaSembrado) {
+      const b = writeBatch(db);
+      b.set(metaRef, { seeded: true, seededAt: serverTimestamp() }, { merge: true });
+      await b.commit();
+    }
+    return;
+  }
 
   const batch = writeBatch(db);
-  for (const [col, items] of Object.entries(DEFAULT_CATALOGOS)) {
-    items.forEach((nombre, i) => {
+  for (const col of faltantes) {
+    (DEFAULT_CATALOGOS[col] || []).forEach((nombre, i) => {
       batch.set(doc(collection(db, col)), { nombre, orden: i, activo: true });
     });
   }
-  batch.set(metaRef, { seeded: true, seededAt: serverTimestamp() });
+  batch.set(metaRef, { seeded: true, seededAt: serverTimestamp() }, { merge: true });
   await batch.commit();
-  console.log("[WRC] Catálogos iniciales creados.");
+  console.log("[WRC] Catálogos rellenados:", faltantes);
 }
 
 /* =========================================================
-   LISTENERS
+   TRANSACCIONES (tiempo real)
    ========================================================= */
-function escucharCatalogo(nombre) {
-  onSnapshot(collection(db, nombre),
-    (snap) => {
-      catalogos[nombre] = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a,b) =>
-          (a.orden ?? 9999) - (b.orden ?? 9999) ||
-          String(a.nombre).localeCompare(String(b.nombre), "es"));
-      renderTodo();
-      const modalAdmin = document.getElementById("modalAdmin");
-      const vistaAdmin = document.getElementById("vistaAdmin");
-      if (modalAdmin && modalAdmin.style.display === "flex"
-          && vistaAdmin && vistaAdmin.style.display !== "none") {
-        window.actualizarVistaAdmin();
-      }
-    },
-    (err) => console.error(`[WRC] onSnapshot ${nombre}:`, err.code, err.message));
-}
-
 function escucharTransacciones(fecha) {
   if (unsubscribeTrans) { unsubscribeTrans(); unsubscribeTrans = null; }
   const q = query(collection(db, "transacciones"), where("fecha", "==", fecha));
@@ -290,7 +335,7 @@ function escucharTransacciones(fecha) {
       renderTransacciones();
       actualizarIndicadorSync();
     },
-    (err) => console.error("[WRC] onSnapshot trans:", err.code, err.message));
+    (err) => console.warn("[WRC] onSnapshot trans:", err.code, err.message));
 }
 
 /* =========================================================
@@ -314,7 +359,7 @@ function renderListaUL(ulId, items, seleccionado, onSelect) {
   if (!items.length) {
     const li = document.createElement("li");
     li.style.cssText = "color:#999;font-style:italic;justify-content:center;";
-    li.textContent = "Cargando…";
+    li.textContent = "Sin elementos";
     ul.appendChild(li);
     return;
   }
@@ -471,9 +516,7 @@ window.cerrarTransacciones = function() {
   document.getElementById("modalTransacciones").style.display = "none";
 };
 
-/* =========================================================
-   PIN
-   ========================================================= */
+/* ---------- PIN ---------- */
 function actualizarPinDots() {
   const dots = document.querySelectorAll("#pinDisplay .pin-dot");
   dots.forEach((d, i) => d.classList.toggle("lleno", i < state.pin.length));
@@ -509,9 +552,7 @@ window.borrarPin = function() {
   actualizarPinDots();
 };
 
-/* =========================================================
-   ADMIN
-   ========================================================= */
+/* ---------- ADMIN ---------- */
 window.actualizarVistaAdmin = function() {
   const cat = document.getElementById("adminCategoria").value;
   const ul = document.getElementById("adminListaActual");
@@ -562,9 +603,7 @@ window.agregarItemAdmin = async function() {
   } catch(e) { mostrarToast("Error", e.message, "error"); }
 };
 
-/* =========================================================
-   EDITAR/ELIMINAR TRANSACCIONES
-   ========================================================= */
+/* ---------- EDITAR / ELIMINAR TRANSACCIONES ---------- */
 document.addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-accion]");
   if (!btn) return;
@@ -688,9 +727,7 @@ function construirExcel(datos, etiquetaArchivo) {
   mostrarToast("Excel descargado", `${COLUMNAS_EXCEL.length} columnas · ${filas.length} filas`, "ok", 2500);
 }
 
-/* =========================================================
-   BOTÓN 🗓️ RANGO DE FECHAS
-   ========================================================= */
+/* ---------- BOTÓN 🗓️ ---------- */
 function inyectarEstilosRango() {
   if (document.getElementById("estilos-rango")) return;
   const s = document.createElement("style");
@@ -818,9 +855,7 @@ async function exportarRango(desde, hasta) {
   }
 }
 
-/* =========================================================
-   INDICADOR DE RED
-   ========================================================= */
+/* ---------- INDICADOR DE RED ---------- */
 function actualizarIndicadorSync() {
   const el = document.getElementById("sync-indicador");
   if (!el) return;
@@ -843,4 +878,4 @@ function actualizarIndicadorSync() {
 
 setInterval(actualizarIndicadorSync, 3000);
 
-console.log("%cWRC Registro · Firebase v3.0","color:#e74c3c;font-weight:bold;font-size:12px");
+console.log("%cWRC Registro · Firebase v3.1","color:#e74c3c;font-weight:bold;font-size:12px");
