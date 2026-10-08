@@ -451,7 +451,7 @@ window.guardarRegistro = async function() {
       actualizado:  serverTimestamp()
     });
 
-    state.variedad = ""; state.plaga = ""; state.cantidad = "";
+    state.plaga = ""; state.cantidad = "";
     renderListas(); renderPantalla();
 
     if (navigator.onLine) {
