@@ -650,6 +650,11 @@ window.borrarTodo = function() {
   renderPantalla();
 };
 
+window.borrarDigito = function() {
+  state.cantidad = state.cantidad.slice(0, -1);
+  renderPantalla();
+};
+
 /* =========================================================
    MALLAS: TECLADO Y GUARDAR
    ========================================================= */

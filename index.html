@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Registro Nacional - Calidad y Mallas</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=3.7">
+    <link rel="stylesheet" href="styles.css?v=3.8">
 </head>
 <body>
 
@@ -99,6 +99,7 @@
                 <div class="tecla" onclick="presionarTecla('9')">9</div>
                 <div class="tecla borrar" onclick="borrarTodo()">Borrar</div>
                 <div class="tecla" onclick="presionarTecla('0')">0</div>
+                <div class="tecla retroceso" onclick="borrarDigito()" aria-label="Borrar último número">⌫</div>
             </div>
 
             <button class="btn-guardar-grande" onclick="guardarRegistro()">
@@ -335,6 +336,6 @@
         </div>
     </div>
 
-    <script type="module" src="app.js?v=3.7"></script>
+    <script type="module" src="app.js?v=3.8"></script>
 </body>
 </html>

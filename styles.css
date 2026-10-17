@@ -1028,7 +1028,11 @@ body.tab-mallas .solo-calidad { display: none; }
     .main-container, .mallas-container { overflow: visible; flex: none; padding: 8px; }
     .main-container, .mallas-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
     .mallas-grid { flex: none; }
-    .columna { height: 420px; }
+    .columna { height: 520px; }
+    /* Cabecera en una sola fila */
+    .marca { display: none; }
+    .btn-registros .btn-texto { display: none; }
+    .header-left input[type="date"] { min-width: 140px; }
     .panel-teclado { overflow: visible; }
     .panel-mallas { overflow: visible; }
     .panel-mallas .teclado-grid { flex: none; grid-auto-rows: 58px; }
