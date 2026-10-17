@@ -1,5 +1,6 @@
 /* =========================================================================
-   WRC · REGISTRO NACIONAL CALIDAD — Firebase Firestore
+   WRC · REGISTRO NACIONAL CALIDAD + MALLAS — Firebase Firestore
+   v3.2: Pestaña Mallas (colección "mallas", catálogos estructuras/cosechadores)
    v3.1: Carga robusta de catálogos (getDocs + onSnapshot)
    ========================================================================= */
 
@@ -53,14 +54,20 @@ const DEFAULT_CATALOGOS = {
     "2 CABEZAS O MENOS","TALLOS DELGADOS","PÁLIDOS","B. DESCABEZADO CULTIVO",
     "INTOXICACIÓN","SIN FOLLAJE","GUSANO","MB","DIPTEROS","LEOPIDOPTEROS",
     "COLEOPTEROS","SEMILLA DE MALEZA","OTROS"
-  ]
+  ],
+  // Catálogos del módulo Mallas (se amplían desde ⚙️ Administración)
+  estructuras: ["ETAPA1"],
+  cosechadores: ["CODIGO 1"]
 };
 
-const CATS = ["proveedores","clasificadores","variedades","plagas"];
+const CATS = ["proveedores","clasificadores","variedades","plagas","estructuras","cosechadores"];
 const ETIQUETAS_CAT = {
   proveedores:"Proveedores", clasificadores:"Clasificadores",
-  variedades:"Variedades", plagas:"Plagas"
+  variedades:"Variedades", plagas:"Plagas",
+  estructuras:"Bloques", cosechadores:"Cosechadores"
 };
+
+const TALLOS_MALLA_COMPLETA = 25;
 
 const PLAGAS_ORDEN = [
   "MALTRATO FOLLAJE","BOTON MALTRATADO","MALTRATO POSTCO","B. ABIERTO",
@@ -92,16 +99,28 @@ const state = {
   clasificador: "", variedad: "", plaga: "",
   cantidad: "",
   pin: "",
-  editandoId: null
+  editandoId: null,
+  tab: "calidad",
+  malla: {
+    proveedor: localStorage.getItem("wrc_malla_proveedor") || "",
+    estructura: "", cosechador: "", variedad: "",
+    cantidad: "1",
+    tallos: String(TALLOS_MALLA_COMPLETA),
+    campo: "cantidad",     // campo activo del teclado: "cantidad" | "tallos"
+    reemplazar: true       // la próxima tecla reemplaza el valor
+  }
 };
 
 const catalogos = {
   proveedores: [], clasificadores: [],
-  variedades: [], plagas: []
+  variedades: [], plagas: [],
+  estructuras: [], cosechadores: []
 };
 
 let transaccionesCache = [];
 let unsubscribeTrans = null;
+let mallasCache = [];
+let unsubscribeMallas = null;
 
 /* ---------- UTILS ---------- */
 function $(id) { return document.getElementById(id); }
@@ -249,8 +268,9 @@ function aplicarCatalogo(nombre, snap) {
   // Cargar catálogos (getDocs + onSnapshot)
   CATS.forEach(cargarCatalogo);
 
-  // Transacciones
+  // Transacciones + Mallas
   escucharTransacciones(state.fecha);
+  escucharMallas(state.fecha);
 
   const f = $("fecha");
   if (f) {
@@ -259,8 +279,12 @@ function aplicarCatalogo(nombre, snap) {
       state.fecha = e.target.value || new Date().toISOString().slice(0,10);
       state.editandoId = null;
       escucharTransacciones(state.fecha);
+      escucharMallas(state.fecha);
     });
   }
+
+  // Restaurar la última pestaña usada
+  window.cambiarTab(localStorage.getItem("wrc_tab") === "mallas" ? "mallas" : "calidad");
 
   actualizarIndicadorSync();
   window.addEventListener("online", () => {
@@ -339,11 +363,47 @@ function escucharTransacciones(fecha) {
 }
 
 /* =========================================================
+   MALLAS (tiempo real)
+   ========================================================= */
+function escucharMallas(fecha) {
+  if (unsubscribeMallas) { unsubscribeMallas(); unsubscribeMallas = null; }
+  const q = query(collection(db, "mallas"), where("fecha", "==", fecha));
+  unsubscribeMallas = onSnapshot(q,
+    (snap) => {
+      mallasCache = snap.docs
+        .map(d => ({ ...d.data(), id: d.id, pendiente: d.metadata.hasPendingWrites }))
+        .sort((a,b) => (b.creadoLocal ?? 0) - (a.creadoLocal ?? 0));
+      renderMallas();
+      actualizarIndicadorSync();
+    },
+    (err) => console.warn("[WRC] onSnapshot mallas:", err.code, err.message));
+}
+
+/* =========================================================
+   PESTAÑAS
+   ========================================================= */
+window.cambiarTab = function(tab) {
+  state.tab = tab;
+  document.querySelectorAll(".tab-btn").forEach(b => {
+    const activo = b.dataset.tab === tab;
+    b.classList.toggle("activo", activo);
+    b.setAttribute("aria-selected", activo ? "true" : "false");
+  });
+  document.querySelectorAll(".tab-panel").forEach(p => {
+    p.classList.toggle("activo", p.id === "tab-" + tab);
+  });
+  document.body.classList.toggle("tab-mallas", tab === "mallas");
+  localStorage.setItem("wrc_tab", tab);
+};
+
+/* =========================================================
    RENDER
    ========================================================= */
 function renderTodo() {
   renderListas();
   renderPantalla();
+  renderPantallaMalla();
+  renderMallas();
 }
 
 function renderListas() {
@@ -351,6 +411,64 @@ function renderListas() {
   renderListaUL("lista-clasificadores", catalogos.clasificadores, state.clasificador, v => { state.clasificador = (state.clasificador===v)?"":v; renderListas(); });
   renderListaUL("lista-variedades",     catalogos.variedades,     state.variedad,     v => { state.variedad     = (state.variedad===v)?"":v;     renderListas(); });
   renderListaUL("lista-plagas",         catalogos.plagas,         state.plaga,        v => { state.plaga        = (state.plaga===v)?"":v;        renderListas(); });
+
+  // Módulo Mallas
+  const m = state.malla;
+  renderListaUL("lista-proveedores-mallas", catalogos.proveedores, m.proveedor, v => {
+    m.proveedor = (m.proveedor===v)?"":v;
+    localStorage.setItem("wrc_malla_proveedor", m.proveedor);
+    renderListas();
+  });
+  renderListaUL("lista-estructuras",       catalogos.estructuras,  m.estructura, v => { m.estructura = (m.estructura===v)?"":v; renderListas(); });
+  renderListaUL("lista-cosechadores",      catalogos.cosechadores, m.cosechador, v => { m.cosechador = (m.cosechador===v)?"":v; renderListas(); });
+  renderListaUL("lista-variedades-mallas", catalogos.variedades,   m.variedad,   v => { m.variedad   = (m.variedad===v)?"":v;   renderListas(); });
+}
+
+function renderPantallaMalla() {
+  const m = state.malla;
+  const c = $("valor-cantidad"), t = $("valor-tallos"), tot = $("total-malla");
+  if (c) c.textContent = m.cantidad === "" ? "0" : m.cantidad;
+  if (t) t.textContent = m.tallos === "" ? "0" : m.tallos;
+  if (tot) tot.textContent = ((parseInt(m.cantidad,10)||0) * (parseInt(m.tallos,10)||0)).toLocaleString("es-EC");
+  $("disp-cantidad")?.classList.toggle("activo", m.campo === "cantidad");
+  $("disp-tallos")?.classList.toggle("activo", m.campo === "tallos");
+}
+
+function renderMallas() {
+  const tbody = $("tablaMallasBody");
+  let mallas = 0, tallos = 0;
+  mallasCache.forEach(r => {
+    mallas += Number(r.cantidad) || 0;
+    tallos += Number(r.totalTallos) || 0;
+  });
+  const n = mallasCache.length;
+  if ($("resumen-registros")) $("resumen-registros").textContent = n.toLocaleString("es-EC");
+  if ($("resumen-mallas"))    $("resumen-mallas").textContent    = mallas.toLocaleString("es-EC");
+  if ($("resumen-tallos"))    $("resumen-tallos").textContent    = tallos.toLocaleString("es-EC");
+  if ($("contadorMallas"))    $("contadorMallas").textContent    = `${n} registro${n===1?"":"s"} · ${state.fecha}`;
+  if (!tbody) return;
+
+  if (!n) {
+    tbody.innerHTML = `<tr><td colspan="10" class="sin-registros">Sin mallas registradas para esta fecha</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = mallasCache.map((r, i) => {
+    const completa = Number(r.tallos) === TALLOS_MALLA_COMPLETA;
+    return `
+      <tr class="${r.pendiente ? "fila-pendiente" : ""}">
+        <td>${n - i}</td>
+        <td>${esc(r.hora || "—")}${r.pendiente ? " ⏳" : ""}</td>
+        <td class="var">${esc(r.variedad)}</td>
+        <td class="num"><b>${esc(r.cantidad)}</b></td>
+        <td class="num"><span class="chip-tallos ${completa ? "" : "incompleta"}">${esc(String(r.tallos).padStart(2,"0"))}</span></td>
+        <td class="num">${esc(r.totalTallos)}</td>
+        <td>${esc(r.estructura)}</td>
+        <td>${esc(r.cosechador)}</td>
+        <td class="prov" title="${esc(r.proveedor)}">${esc(r.proveedor)}</td>
+        <td><button class="btn-accion btn-eliminar" data-accion="del-malla" data-id="${r.id}" title="Eliminar">🗑️</button></td>
+      </tr>`;
+  }).join("");
 }
 
 function renderListaUL(ulId, items, seleccionado, onSelect) {
@@ -491,6 +609,140 @@ window.borrarTodo = function() {
 };
 
 /* =========================================================
+   MALLAS: TECLADO Y GUARDAR
+   ========================================================= */
+window.elegirCampoMalla = function(campo) {
+  state.malla.campo = campo;
+  state.malla.reemplazar = true;
+  renderPantallaMalla();
+};
+
+window.presionarTeclaMalla = function(d) {
+  const m = state.malla;
+  const actual = m.reemplazar ? "" : m[m.campo];
+  if (actual.length >= 4) return;
+  m[m.campo] = (actual === "0" ? "" : actual) + d;
+  m.reemplazar = false;
+  renderPantallaMalla();
+};
+
+window.borrarMalla = function() {
+  const m = state.malla;
+  m[m.campo] = "";
+  m.reemplazar = false;
+  renderPantallaMalla();
+};
+
+window.tallosCompletos = function() {
+  const m = state.malla;
+  m.tallos = String(TALLOS_MALLA_COMPLETA);
+  m.campo = "cantidad";
+  m.reemplazar = true;
+  renderPantallaMalla();
+};
+
+window.guardarMalla = async function() {
+  const m = state.malla;
+  if (!m.proveedor)  return mostrarToast("Falta Proveedor", "Selecciona un proveedor.", "error");
+  if (!m.estructura) return mostrarToast("Falta Bloque", "Selecciona un bloque.", "error");
+  if (!m.cosechador) return mostrarToast("Falta Cosechador", "Selecciona un cosechador.", "error");
+  if (!m.variedad)   return mostrarToast("Falta Variedad", "Selecciona una variedad.", "error");
+
+  const cantidad = parseInt(m.cantidad, 10);
+  const tallos   = parseInt(m.tallos, 10);
+  if (!Number.isFinite(cantidad) || cantidad <= 0)
+    return mostrarToast("Cantidad inválida", "Ingresa cuántas mallas (mayor a cero).", "error");
+  if (!Number.isFinite(tallos) || tallos <= 0)
+    return mostrarToast("Tallos inválidos", "Ingresa los tallos por malla (mayor a cero).", "error");
+
+  const ahora = new Date();
+  const dos = n => String(n).padStart(2, "0");
+
+  try {
+    await addDoc(collection(db, "mallas"), {
+      fecha:       state.fecha,
+      hora:        `${dos(ahora.getHours())}:${dos(ahora.getMinutes())}:${dos(ahora.getSeconds())}`,
+      proveedor:   m.proveedor,
+      estructura:  m.estructura,
+      cosechador:  m.cosechador,
+      variedad:    m.variedad,
+      cantidad,
+      tallos,
+      totalTallos: cantidad * tallos,
+      usuario:     localStorage.getItem("wrc_usuario") || "TABLET",
+      creadoLocal: ahora.getTime(),
+      creado:      serverTimestamp()
+    });
+
+    // Se mantienen proveedor, estructura, cosechador y variedad para registrar rápido
+    m.cantidad = "1";
+    m.tallos = String(TALLOS_MALLA_COMPLETA);
+    m.campo = "cantidad";
+    m.reemplazar = true;
+    renderPantallaMalla();
+
+    if (navigator.onLine) {
+      mostrarToast("Malla guardada", `${m.variedad} · ${cantidad} × ${tallos} tallos`, "ok");
+    } else {
+      mostrarToast("Guardado localmente", "Sin conexión. Se subirá al reconectar.", "warn", 4200);
+    }
+  } catch(e) {
+    console.error(e);
+    mostrarToast("Error al guardar", e.message, "error");
+  }
+};
+
+window.exportarMallasDia = function() {
+  construirExcelMallas([...mallasCache].reverse(), state.fecha);
+};
+
+function construirExcelMallas(datos, etiquetaArchivo) {
+  if (typeof XLSX === "undefined") return mostrarToast("Falta SheetJS", "No se cargó la librería.", "error");
+  if (!datos || !datos.length) return mostrarToast("Sin datos", "No hay mallas para exportar.", "error");
+
+  // Formato del reporte: una fila por FECHA + BLOQUE + PROVEEDOR + VARIEDAD + T X MALLA,
+  // sumando mallas y tallos (BLOQUE = Estructura del registro).
+  const cols = ["FECHA","AÑO","MES","SEMANA","DIA","BLOQUE","PROVEEDOR","VARIEDAD","T X MALLA","MALLAS","TALLOS","TOTAL"];
+  const grupos = new Map();
+  datos.forEach(r => {
+    const txm = Number(r.tallos) || 0;
+    const key = [r.fecha, r.estructura || "", r.proveedor || "", r.variedad || "", txm].join("¦");
+    if (!grupos.has(key)) {
+      const f = partesFecha(r.fecha);
+      grupos.set(key, {
+        FECHA: r.fecha || "", "AÑO": f.anio, MES: f.mes, SEMANA: f.semana, DIA: f.dia,
+        BLOQUE: r.estructura || "", PROVEEDOR: r.proveedor || "", VARIEDAD: r.variedad || "",
+        "T X MALLA": txm, MALLAS: 0, TALLOS: 0
+      });
+    }
+    const g = grupos.get(key);
+    g.MALLAS += Number(r.cantidad) || 0;
+    g.TALLOS += Number(r.totalTallos) || (Number(r.cantidad) || 0) * txm;
+  });
+
+  const filas = [...grupos.values()]
+    .sort((a, b) =>
+      String(a.FECHA).localeCompare(String(b.FECHA)) ||
+      String(a.BLOQUE).localeCompare(String(b.BLOQUE), "es") ||
+      String(a.PROVEEDOR).localeCompare(String(b.PROVEEDOR), "es") ||
+      String(a.VARIEDAD).localeCompare(String(b.VARIEDAD), "es") ||
+      b["T X MALLA"] - a["T X MALLA"])
+    .map(g => { g.TOTAL = g.TALLOS; return cols.map(c => g[c] ?? ""); });
+
+  let totM = 0, totT = 0;
+  filas.forEach(f => { totM += f[9]; totT += f[10]; });
+  const filaTotal = ["TOTALES","","","","","","","","", totM, totT, totT];
+
+  const ws = XLSX.utils.aoa_to_sheet([cols, ...filas, filaTotal]);
+  ws["!cols"] = [{wch:12},{wch:7},{wch:11},{wch:9},{wch:11},{wch:24},{wch:34},{wch:30},{wch:11},{wch:9},{wch:9},{wch:9}];
+  ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: cols.length - 1 } }) };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "MALLAS");
+  XLSX.writeFile(wb, `Registro_Mallas_${etiquetaArchivo}.xlsx`);
+  mostrarToast("Excel descargado", `${filas.length} filas · ${totT.toLocaleString("es-EC")} tallos`, "ok", 2500);
+}
+
+/* =========================================================
    MODALES
    ========================================================= */
 window.abrirAdmin = function() {
@@ -609,6 +861,16 @@ document.addEventListener("click", async (e) => {
   if (!btn) return;
   const accion = btn.dataset.accion;
   const id = btn.dataset.id;
+
+  if (accion === "del-malla") {
+    if (!confirm("¿Eliminar este registro de malla? No se puede deshacer.")) return;
+    try {
+      await deleteDoc(doc(db, "mallas", id));
+      mostrarToast("Malla eliminada", "", "ok", 2000);
+    }
+    catch(e) { mostrarToast("Error", e.message, "error"); }
+    return;
+  }
 
   if (accion === "edit")   { state.editandoId = id; renderTransacciones(); return; }
   if (accion === "cancel") { state.editandoId = null; renderTransacciones(); return; }
@@ -835,6 +1097,23 @@ async function exportarRango(desde, hasta) {
   try {
     mostrarToast("Consultando…", `Trayendo datos de ${desde} a ${hasta}`, "info", 2000);
 
+    // En la pestaña Mallas, el rango exporta mallas
+    if (state.tab === "mallas") {
+      const qm = query(
+        collection(db, "mallas"),
+        where("fecha", ">=", desde),
+        where("fecha", "<=", hasta)
+      );
+      const snapM = await getDocs(qm);
+      const datosM = snapM.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (!datosM.length) {
+        return mostrarToast("Sin datos", "No hay mallas en ese rango.", "warn", 3000);
+      }
+      datosM.sort((a, b) =>
+        String(a.fecha).localeCompare(String(b.fecha)) || (a.creadoLocal ?? 0) - (b.creadoLocal ?? 0));
+      return construirExcelMallas(datosM, `${desde}_a_${hasta}`);
+    }
+
     const q = query(
       collection(db, "transacciones"),
       where("fecha", ">=", desde),
@@ -860,7 +1139,8 @@ function actualizarIndicadorSync() {
   const el = document.getElementById("sync-indicador");
   if (!el) return;
 
-  const pendientes = transaccionesCache.filter(t => t.pendiente).length;
+  const pendientes = transaccionesCache.filter(t => t.pendiente).length
+                   + mallasCache.filter(t => t.pendiente).length;
 
   if (!navigator.onLine) {
     el.className = "sync-indicador offline";

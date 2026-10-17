@@ -3,17 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Registro Nacional - Calidad</title>
+    <title>Registro Nacional - Calidad y Mallas</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3.3">
 </head>
 <body>
 
     <header>
         <div class="header-left">
-            <input type="date" id="fecha" value="2026-10-06">
+            <div class="marca">
+                <span class="marca-logo">W</span>
+                <span class="marca-texto">Registro Nacional</span>
+            </div>
+
+            <nav class="tabs" role="tablist" aria-label="Módulos">
+                <button class="tab-btn activo" role="tab" data-tab="calidad" onclick="cambiarTab('calidad')">Calidad</button>
+                <button class="tab-btn" role="tab" data-tab="mallas" onclick="cambiarTab('mallas')">Mallas</button>
+            </nav>
+
+            <input type="date" id="fecha" value="2026-10-06" aria-label="Fecha">
             <button class="icon-btn" onclick="abrirAdmin()" title="Administrar Listas">⚙️</button>
-            <button class="icon-btn" onclick="abrirTransacciones()" title="Ver Transacciones">📋</button>
+            <button class="icon-btn solo-calidad" onclick="abrirTransacciones()" title="Ver Transacciones">📋</button>
         </div>
         <div class="header-right">
             <div id="sync-indicador" class="sync-indicador online">🟢 En línea</div>
@@ -21,8 +31,9 @@
         </div>
     </header>
 
-    <div class="main-container">
-        
+    <!-- =================== PESTAÑA CALIDAD =================== -->
+    <div id="tab-calidad" class="main-container tab-panel activo">
+
         <div class="columna columna-dividida">
             <div class="sub-seccion">
                 <div class="columna-header">
@@ -37,7 +48,7 @@
 
             <div class="sub-seccion">
                 <div class="columna-header">
-                    Clasificadores 
+                    Clasificadores
                     <span class="lupa-btn" onclick="toggleBuscador('buscador-clasificadores')">🔍</span>
                 </div>
                 <div class="buscador" id="buscador-clasificadores">
@@ -49,7 +60,7 @@
 
         <div class="columna">
             <div class="columna-header">
-                Variedades 
+                Variedades
                 <span class="lupa-btn" onclick="toggleBuscador('buscador-variedades')">🔍</span>
             </div>
             <div class="buscador" id="buscador-variedades">
@@ -91,6 +102,120 @@
         </div>
     </div>
 
+    <!-- =================== PESTAÑA MALLAS =================== -->
+    <div id="tab-mallas" class="mallas-container tab-panel">
+
+        <div class="mallas-grid">
+            <div class="columna columna-dividida">
+                <div class="sub-seccion">
+                    <div class="columna-header">
+                        Proveedores
+                        <span class="lupa-btn" onclick="toggleBuscador('buscador-proveedores-mallas')">🔍</span>
+                    </div>
+                    <div class="buscador" id="buscador-proveedores-mallas">
+                        <input type="text" placeholder="Buscar proveedor..." oninput="filtrarLista('lista-proveedores-mallas', this.value)">
+                    </div>
+                    <ul class="lista-items" id="lista-proveedores-mallas"></ul>
+                </div>
+                <div class="sub-seccion">
+                    <div class="columna-header">
+                        Bloque
+                        <span class="lupa-btn" onclick="toggleBuscador('buscador-estructuras')">🔍</span>
+                    </div>
+                    <div class="buscador" id="buscador-estructuras">
+                        <input type="text" placeholder="Buscar bloque..." oninput="filtrarLista('lista-estructuras', this.value)">
+                    </div>
+                    <ul class="lista-items" id="lista-estructuras"></ul>
+                </div>
+            </div>
+
+            <div class="columna">
+                <div class="columna-header">
+                    Cosechador
+                    <span class="lupa-btn" onclick="toggleBuscador('buscador-cosechadores')">🔍</span>
+                </div>
+                <div class="buscador" id="buscador-cosechadores">
+                    <input type="text" placeholder="Buscar cosechador..." oninput="filtrarLista('lista-cosechadores', this.value)">
+                </div>
+                <ul class="lista-items" id="lista-cosechadores"></ul>
+            </div>
+
+            <div class="columna">
+                <div class="columna-header">
+                    Variedades
+                    <span class="lupa-btn" onclick="toggleBuscador('buscador-variedades-mallas')">🔍</span>
+                </div>
+                <div class="buscador" id="buscador-variedades-mallas">
+                    <input type="text" placeholder="Buscar variedad..." oninput="filtrarLista('lista-variedades-mallas', this.value)">
+                </div>
+                <ul class="lista-items" id="lista-variedades-mallas"></ul>
+            </div>
+
+            <div class="panel-teclado panel-mallas">
+                <div class="displays-malla">
+                    <button class="display-malla activo" id="disp-cantidad" onclick="elegirCampoMalla('cantidad')">
+                        <span class="display-label">Mallas</span>
+                        <span class="display-valor" id="valor-cantidad">1</span>
+                    </button>
+                    <button class="display-malla" id="disp-tallos" onclick="elegirCampoMalla('tallos')">
+                        <span class="display-label">Tallos/malla</span>
+                        <span class="display-valor" id="valor-tallos">25</span>
+                    </button>
+                </div>
+                <div class="total-malla">Total: <b id="total-malla">25</b> tallos</div>
+
+                <div class="teclado-grid">
+                    <div class="tecla" onclick="presionarTeclaMalla('1')">1</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('2')">2</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('3')">3</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('4')">4</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('5')">5</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('6')">6</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('7')">7</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('8')">8</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('9')">9</div>
+                    <div class="tecla borrar" onclick="borrarMalla()">Borrar</div>
+                    <div class="tecla" onclick="presionarTeclaMalla('0')">0</div>
+                    <div class="tecla rapida" onclick="tallosCompletos()" title="Malla completa">25</div>
+                </div>
+
+                <button class="btn-guardar-grande" onclick="guardarMalla()">
+                    💾 GUARDAR MALLA
+                </button>
+            </div>
+        </div>
+
+        <div class="mallas-tabla">
+            <div class="mallas-tabla-header">
+                <span class="mallas-tabla-titulo">Mallas del día</span>
+                <span class="mallas-tabla-sub" id="contadorMallas">0 registros</span>
+                <span class="resumen-chip">Mallas <b id="resumen-mallas">0</b></span>
+                <span class="resumen-chip">Tallos <b id="resumen-tallos">0</b></span>
+                <button class="btn-secundario" onclick="exportarMallasDia()">⬇️ Excel del día</button>
+            </div>
+            <div class="tabla-transacciones-wrapper">
+                <table class="tabla-transacciones tabla-mallas">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Hora</th>
+                            <th>Variedad</th>
+                            <th class="num">Mallas</th>
+                            <th class="num">Tallos</th>
+                            <th class="num">Total</th>
+                            <th>Bloque</th>
+                            <th>Cosechador</th>
+                            <th>Proveedor</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaMallasBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== MODAL ADMIN =================== -->
     <div id="modalAdmin" class="modal">
         <div class="modal-content modal-admin">
             <div id="vistaPin">
@@ -98,10 +223,10 @@
                     <h2>🔒 Acceso Restringido</h2>
                     <span class="close" onclick="cerrarAdmin()">&times;</span>
                 </div>
-                
+
                 <div class="pin-container">
                     <p class="pin-mensaje">Ingresa el PIN de 4 dígitos</p>
-                    
+
                     <div class="pin-display" id="pinDisplay">
                         <span class="pin-dot"></span>
                         <span class="pin-dot"></span>
@@ -132,7 +257,7 @@
                     <h2>⚙️ Administración de Datos</h2>
                     <span class="close" onclick="cerrarAdmin()">&times;</span>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Categoría a modificar:</label>
                     <select id="adminCategoria" onchange="actualizarVistaAdmin()">
@@ -140,6 +265,8 @@
                         <option value="clasificadores">Clasificadores</option>
                         <option value="variedades">Variedades</option>
                         <option value="plagas">Plagas</option>
+                        <option value="estructuras">Bloques (Mallas)</option>
+                        <option value="cosechadores">Cosechadores (Mallas)</option>
                     </select>
                 </div>
 
@@ -160,13 +287,14 @@
         </div>
     </div>
 
+    <!-- =================== MODAL TRANSACCIONES (CALIDAD) =================== -->
     <div id="modalTransacciones" class="modal">
         <div class="modal-content modal-transacciones">
             <div class="modal-header">
                 <h2>📋 Transacciones Registradas</h2>
                 <span class="close" onclick="cerrarTransacciones()">&times;</span>
             </div>
-            
+
             <div class="transacciones-info">
                 <span id="contadorTransacciones">0 registros</span>
             </div>
@@ -191,6 +319,6 @@
         </div>
     </div>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=3.3"></script>
 </body>
 </html>
