@@ -1022,7 +1022,7 @@ body.tab-mallas .solo-calidad { display: none; }
 }
 
 /* ---------- Tablets en vertical y pantallas angostas: 2 columnas con scroll ---------- */
-@media (max-width: 1000px), (orientation: portrait) and (max-width: 1300px) {
+@media (max-width: 1000px) {
     html, body { height: auto; min-height: 100%; overflow-y: auto; overflow-x: hidden; }
     header { position: sticky; top: 0; }
     .main-container, .mallas-container { overflow: visible; flex: none; padding: 8px; }
@@ -1088,3 +1088,6 @@ body.tab-mallas .solo-calidad { display: none; }
     white-space: nowrap;
 }
 .resumen-chip b { color: var(--verde-osc); font-size: 15px; margin-left: 4px; }
+
+/* Celular con vista completa: teclado de Mallas arriba, sin espacio vacío encima */
+html.modo-celular .panel-mallas { justify-content: flex-start; }

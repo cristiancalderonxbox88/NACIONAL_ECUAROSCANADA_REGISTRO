@@ -3,9 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script>
+        // Celulares y tablets pequeñas: mostrar la vista completa lado a lado (como en tablet grande)
+        (function () {
+            var lado = Math.min(screen.width, screen.height);
+            if (lado < 1000) {
+                document.querySelector('meta[name="viewport"]').setAttribute("content", "width=1100, user-scalable=no");
+                document.documentElement.className += " modo-celular";
+            }
+        })();
+    </script>
     <title>Registro Nacional - Calidad y Mallas</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=3.8">
+    <link rel="stylesheet" href="styles.css?v=3.9">
 </head>
 <body>
 
@@ -336,6 +346,6 @@
         </div>
     </div>
 
-    <script type="module" src="app.js?v=3.8"></script>
+    <script type="module" src="app.js?v=3.9"></script>
 </body>
 </html>
