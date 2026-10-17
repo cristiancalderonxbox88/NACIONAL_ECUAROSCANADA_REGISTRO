@@ -57,14 +57,16 @@ const DEFAULT_CATALOGOS = {
   ],
   // Catálogos del módulo Mallas (se amplían desde ⚙️ Administración)
   estructuras: ["ETAPA1"],
-  cosechadores: ["CODIGO 1"]
+  cosechadores: ["CODIGO 1"],
+  // Tallos por malla: 01 a 25 al inicio; se agregan más desde ⚙️ Administración
+  tallos: Array.from({ length: 25 }, (_, i) => String(i + 1).padStart(2, "0"))
 };
 
-const CATS = ["proveedores","clasificadores","variedades","plagas","estructuras","cosechadores"];
+const CATS = ["proveedores","clasificadores","variedades","plagas","estructuras","cosechadores","tallos"];
 const ETIQUETAS_CAT = {
   proveedores:"Proveedores", clasificadores:"Clasificadores",
   variedades:"Variedades", plagas:"Plagas",
-  estructuras:"Bloques", cosechadores:"Cosechadores"
+  estructuras:"Bloques", cosechadores:"Cosechadores", tallos:"Tallos por malla"
 };
 
 const TALLOS_MALLA_COMPLETA = 25;
@@ -114,7 +116,7 @@ const state = {
 const catalogos = {
   proveedores: [], clasificadores: [],
   variedades: [], plagas: [],
-  estructuras: [], cosechadores: []
+  estructuras: [], cosechadores: [], tallos: []
 };
 
 let transaccionesCache = [];
@@ -394,6 +396,26 @@ window.cambiarTab = function(tab) {
   });
   document.body.classList.toggle("tab-mallas", tab === "mallas");
   localStorage.setItem("wrc_tab", tab);
+  actualizarBadgeRegistros();
+};
+
+/* Botón 📋 Registros: abre la ventana de la pestaña activa */
+function actualizarBadgeRegistros() {
+  const b = $("badgeRegistros"); if (!b) return;
+  b.textContent = state.tab === "mallas" ? mallasCache.length : transaccionesCache.length;
+}
+
+window.abrirRegistros = function() {
+  if (state.tab === "mallas") {
+    renderMallas();
+    $("modalMallas").style.display = "flex";
+  } else {
+    window.abrirTransacciones();
+  }
+};
+
+window.cerrarMallas = function() {
+  $("modalMallas").style.display = "none";
 };
 
 /* =========================================================
@@ -422,6 +444,26 @@ function renderListas() {
   renderListaUL("lista-estructuras",       catalogos.estructuras,  m.estructura, v => { m.estructura = (m.estructura===v)?"":v; renderListas(); });
   renderListaUL("lista-cosechadores",      catalogos.cosechadores, m.cosechador, v => { m.cosechador = (m.cosechador===v)?"":v; renderListas(); });
   renderListaUL("lista-variedades-mallas", catalogos.variedades,   m.variedad,   v => { m.variedad   = (m.variedad===v)?"":v;   renderListas(); });
+  renderGridTallos();
+  renderResumenSeleccion();
+}
+
+/* Resumen sobre el botón Guardar: lo elegido o lo que falta */
+function renderResumenSeleccion() {
+  const el = $("resumenSeleccion"); if (!el) return;
+  const m = state.malla;
+  const faltan = [
+    !m.proveedor && "proveedor", !m.estructura && "bloque",
+    !m.cosechador && "cosechador", !m.variedad && "variedad"
+  ].filter(Boolean);
+  if (faltan.length) {
+    el.classList.remove("completo");
+    el.textContent = "Falta elegir: " + faltan.join(", ");
+  } else {
+    el.classList.add("completo");
+    el.textContent = `${m.variedad} · ${m.tallos} tallos · ${m.estructura} · ${m.cosechador}`;
+    el.title = m.proveedor;
+  }
 }
 
 function renderPantallaMalla() {
@@ -430,8 +472,6 @@ function renderPantallaMalla() {
   if (c) c.textContent = m.cantidad === "" ? "0" : m.cantidad;
   if (t) t.textContent = m.tallos === "" ? "0" : m.tallos;
   if (tot) tot.textContent = ((parseInt(m.cantidad,10)||0) * (parseInt(m.tallos,10)||0)).toLocaleString("es-EC");
-  $("disp-cantidad")?.classList.toggle("activo", m.campo === "cantidad");
-  $("disp-tallos")?.classList.toggle("activo", m.campo === "tallos");
 }
 
 function renderMallas() {
@@ -442,6 +482,7 @@ function renderMallas() {
     tallos += Number(r.totalTallos) || 0;
   });
   const n = mallasCache.length;
+  actualizarBadgeRegistros();
   if ($("resumen-registros")) $("resumen-registros").textContent = n.toLocaleString("es-EC");
   if ($("resumen-mallas"))    $("resumen-mallas").textContent    = mallas.toLocaleString("es-EC");
   if ($("resumen-tallos"))    $("resumen-tallos").textContent    = tallos.toLocaleString("es-EC");
@@ -501,6 +542,7 @@ function renderTransacciones() {
   if (!tbody) return;
 
   if (cont) cont.textContent = `${transaccionesCache.length} registro${transaccionesCache.length===1?"":"s"}`;
+  actualizarBadgeRegistros();
   tbody.innerHTML = "";
 
   if (!transaccionesCache.length) {
@@ -611,35 +653,70 @@ window.borrarTodo = function() {
 /* =========================================================
    MALLAS: TECLADO Y GUARDAR
    ========================================================= */
-window.elegirCampoMalla = function(campo) {
-  state.malla.campo = campo;
-  state.malla.reemplazar = true;
-  renderPantallaMalla();
-};
-
+// El teclado escribe solo la cantidad de mallas.
+// La primera tecla después de guardar reemplaza el 1 inicial.
 window.presionarTeclaMalla = function(d) {
   const m = state.malla;
-  const actual = m.reemplazar ? "" : m[m.campo];
+  const actual = m.reemplazar ? "" : m.cantidad;
   if (actual.length >= 4) return;
-  m[m.campo] = (actual === "0" ? "" : actual) + d;
+  m.cantidad = (actual === "0" ? "" : actual) + d;
   m.reemplazar = false;
   renderPantallaMalla();
 };
 
 window.borrarMalla = function() {
   const m = state.malla;
-  m[m.campo] = "";
+  m.cantidad = "";
   m.reemplazar = false;
   renderPantallaMalla();
 };
 
-window.tallosCompletos = function() {
+window.borrarDigitoMalla = function() {
   const m = state.malla;
-  m.tallos = String(TALLOS_MALLA_COMPLETA);
-  m.campo = "cantidad";
-  m.reemplazar = true;
+  m.cantidad = m.reemplazar ? "" : m.cantidad.slice(0, -1);
+  m.reemplazar = false;
   renderPantallaMalla();
 };
+
+// Tallos por malla: lista que se administra en ⚙️ (de menor a mayor)
+function opcionesTallos() {
+  const nums = (catalogos.tallos || [])
+    .map(t => parseInt(t.nombre ?? t, 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  const unicos = [...new Set(nums)].sort((a, b) => a - b);
+  // Mientras carga el catálogo, mostrar 1 a 25
+  return unicos.length ? unicos : Array.from({ length: TALLOS_MALLA_COMPLETA }, (_, i) => i + 1);
+}
+
+function renderGridTallos() {
+  const cont = $("grid-tallos"); if (!cont) return;
+  const sel = parseInt(state.malla.tallos, 10);
+  let html = "";
+  for (const n of opcionesTallos()) {
+    const clases = ["chip-tallo"];
+    if (n === sel) clases.push("activo");
+    if (n === TALLOS_MALLA_COMPLETA) clases.push("completa");
+    html += `<button class="${clases.join(" ")}" data-tallos="${n}" aria-pressed="${n === sel}">${String(n).padStart(2, "0")}</button>`;
+  }
+  cont.innerHTML = html;
+  // Bajar la lista hasta el número marcado (sin mover el resto de la página)
+  const activo = cont.querySelector(".chip-tallo.activo");
+  if (activo) {
+    const arriba = activo.offsetTop - cont.offsetTop;
+    if (arriba < cont.scrollTop || arriba + activo.offsetHeight > cont.scrollTop + cont.clientHeight) {
+      cont.scrollTop = arriba - cont.clientHeight / 2 + activo.offsetHeight / 2;
+    }
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".chip-tallo");
+  if (!b) return;
+  state.malla.tallos = b.dataset.tallos;
+  renderGridTallos();
+  renderPantallaMalla();
+  renderResumenSeleccion();
+});
 
 window.guardarMalla = async function() {
   const m = state.malla;
@@ -674,15 +751,18 @@ window.guardarMalla = async function() {
       creado:      serverTimestamp()
     });
 
-    // Se mantienen proveedor, estructura, cosechador y variedad para registrar rápido
+    // Se quedan proveedor, bloque y cosechador; solo se quita la variedad
+    const variedadGuardada = m.variedad;
+    m.variedad = "";
     m.cantidad = "1";
     m.tallos = String(TALLOS_MALLA_COMPLETA);
     m.campo = "cantidad";
     m.reemplazar = true;
+    renderListas();
     renderPantallaMalla();
 
     if (navigator.onLine) {
-      mostrarToast("Malla guardada", `${m.variedad} · ${cantidad} × ${tallos} tallos`, "ok");
+      mostrarToast("Malla guardada", `${variedadGuardada} · ${cantidad} × ${tallos} tallos`, "ok");
     } else {
       mostrarToast("Guardado localmente", "Sin conexión. Se subirá al reconectar.", "warn", 4200);
     }
@@ -840,10 +920,19 @@ window.actualizarVistaAdmin = function() {
 window.agregarItemAdmin = async function() {
   const cat = document.getElementById("adminCategoria").value;
   const input = document.getElementById("adminInput");
-  const nombre = input.value.trim().toUpperCase();
+  let nombre = input.value.trim().toUpperCase();
   if (!nombre) return mostrarToast("Falta nombre", "Escribe un nombre para agregar.", "error");
 
-  const yaExiste = (catalogos[cat] || []).some(i => String(i.nombre).toUpperCase() === nombre);
+  if (cat === "tallos") {
+    const n = parseInt(nombre, 10);
+    if (!/^\d+$/.test(nombre) || n <= 0 || n > 999)
+      return mostrarToast("Número inválido", "Escribe solo el número de tallos, por ejemplo 30.", "error");
+    nombre = String(n).padStart(2, "0");
+  }
+
+  const yaExiste = (catalogos[cat] || []).some(i =>
+    cat === "tallos" ? parseInt(i.nombre, 10) === parseInt(nombre, 10)
+                     : String(i.nombre).toUpperCase() === nombre);
   if (yaExiste) return mostrarToast("Duplicado", "Ese elemento ya existe.", "error");
 
   try {

@@ -2,17 +2,19 @@
 /* PALETA                                       */
 /* ============================================ */
 :root {
-    --verde: #2F6B4F;
-    --verde-osc: #1F4A36;
-    --verde-claro: #E3F0E8;
-    --verde-suave: #F1F7F3;
-    --fondo: #F3F4EF;
+    /* Tema azul (los nombres --verde* se mantienen: son el color principal) */
+    --verde: #1F5FAD;
+    --verde-osc: #143F75;
+    --verde-claro: #E2ECF8;
+    --verde-suave: #F0F5FC;
+    --verde-hover: #2A6FC2;
+    --fondo: #EEF2F7;
     --superficie: #FFFFFF;
-    --superficie-2: #F8F9F5;
-    --borde: #E2E5DD;
-    --borde-fuerte: #D2D7CB;
-    --texto: #1B1F1C;
-    --texto-2: #5C645E;
+    --superficie-2: #F6F8FB;
+    --borde: #DDE3EC;
+    --borde-fuerte: #CBD3DF;
+    --texto: #18202B;
+    --texto-2: #566173;
     --ambar: #8A4B0F;
     --ambar-fondo: #FFF0DC;
     --rojo: #B3261E;
@@ -248,19 +250,19 @@ body.tab-mallas .solo-calidad { display: none; }
     height: 100%;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: auto;
-    scrollbar-color: #A8B0A5 var(--fondo);
+    scrollbar-color: #A9B4C4 var(--fondo);
     scrollbar-gutter: stable;
 }
 
 .lista-items::-webkit-scrollbar { width: 14px; background: var(--fondo); }
 .lista-items::-webkit-scrollbar-track { background: var(--fondo); border-radius: 8px; }
 .lista-items::-webkit-scrollbar-thumb {
-    background: #A8B0A5;
+    background: #A9B4C4;
     border-radius: 8px;
     border: 3px solid var(--fondo);
     min-height: 40px;
 }
-.lista-items::-webkit-scrollbar-thumb:hover { background: #7E877C; }
+.lista-items::-webkit-scrollbar-thumb:hover { background: #7D8899; }
 
 .lista-items li {
     padding: 11px 14px;
@@ -337,11 +339,11 @@ body.tab-mallas .solo-calidad { display: none; }
     color: var(--texto);
     transition: background 0.1s, transform 0.08s;
 }
-.tecla:hover { background: #EFF1EB; }
+.tecla:hover { background: #EAEFF6; }
 .tecla:active { background: var(--borde); transform: scale(0.97); }
-.tecla.borrar { background-color: #3A413C; color: white; border: none; font-size: 17px; }
-.tecla.borrar:active { background-color: #1B1F1C; }
-.tecla.rapida { background: var(--verde-claro); color: var(--verde-osc); border-color: #C6DDCF; }
+.tecla.borrar { background-color: #2E3746; color: white; border: none; font-size: 17px; }
+.tecla.borrar:active { background-color: #18202B; }
+.tecla.rapida { background: var(--verde-claro); color: var(--verde-osc); border-color: #C5D6EE; }
 
 /* ============================================ */
 /* BOTÓN GUARDAR GRANDE */
@@ -367,7 +369,7 @@ body.tab-mallas .solo-calidad { display: none; }
     gap: 10px;
     flex-shrink: 0;
 }
-.btn-guardar-grande:hover { background: #357A5A; }
+.btn-guardar-grande:hover { background: var(--verde-hover); }
 .btn-guardar-grande:active { transform: translateY(3px); box-shadow: 0 0 0 var(--verde-osc); }
 
 .btn-secundario {
@@ -452,16 +454,16 @@ body.tab-mallas .solo-calidad { display: none; }
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 300px;
     gap: 12px;
-    flex: 1 1 64%;
+    flex: 1 1 auto;
     min-height: 0;
 }
 
-.panel-mallas { gap: 8px; overflow: hidden; }
+.panel-mallas { gap: 10px; justify-content: center; }
+/* Teclas con proporción fija: no se estiran con la altura de la pantalla */
 .panel-mallas .teclado-grid {
-    flex: 1 1 auto;
-    min-height: 0;
-    grid-auto-rows: minmax(38px, 1fr);
-    gap: 6px;
+    flex: none;
+    grid-auto-rows: clamp(52px, 10vh, 86px);
+    gap: 8px;
 }
 .panel-mallas .tecla {
     min-height: 0;
@@ -470,7 +472,7 @@ body.tab-mallas .solo-calidad { display: none; }
     align-items: center;
     justify-content: center;
 }
-.panel-mallas .btn-guardar-grande { min-height: 56px; padding: 10px 0; font-size: 18px; }
+.panel-mallas .btn-guardar-grande { min-height: 60px; padding: 10px 0; font-size: 18px; }
 
 .displays-malla {
     display: grid;
@@ -608,7 +610,7 @@ body.tab-mallas .solo-calidad { display: none; }
 .close {
     font-size: 28px;
     cursor: pointer;
-    color: #9AA39B;
+    color: #98A2B3;
     padding: 0 10px;
 }
 .close:hover { color: var(--rojo); }
@@ -722,11 +724,11 @@ body.tab-mallas .solo-calidad { display: none; }
 }
 .pin-tecla:active { background: var(--borde); transform: scale(0.95); }
 .pin-tecla.borrar-pin {
-    background-color: #3A413C;
+    background-color: #2E3746;
     color: white;
     border: none;
 }
-.pin-tecla.borrar-pin:active { background-color: #1B1F1C; }
+.pin-tecla.borrar-pin:active { background-color: #18202B; }
 
 .pin-error {
     color: var(--rojo);
@@ -754,7 +756,7 @@ body.tab-mallas .solo-calidad { display: none; }
     justify-content: space-between;
     align-items: center;
     padding: 8px 4px;
-    border-bottom: 1px solid #F0F1EC;
+    border-bottom: 1px solid #EEF1F5;
     font-size: 14px;
 }
 .admin-item:last-child { border-bottom: none; }
@@ -836,7 +838,7 @@ body.tab-mallas .solo-calidad { display: none; }
 
 .tabla-transacciones td {
     padding: 9px 10px;
-    border-bottom: 1px solid #EEF0EA;
+    border-bottom: 1px solid #EDF0F5;
     color: var(--texto);
     white-space: nowrap;
     overflow: hidden;
@@ -863,117 +865,194 @@ body.tab-mallas .solo-calidad { display: none; }
     margin: 0 2px;
 }
 .btn-editar { background-color: var(--verde-claro); color: var(--verde-osc); }
-.btn-editar:active { background-color: #C6DDCF; }
+.btn-editar:active { background-color: #C5D6EE; }
 .btn-eliminar { background-color: var(--rojo-fondo); color: var(--rojo); }
 .btn-eliminar:active { background-color: #F7D3CF; }
 
 .sin-registros {
     text-align: center;
     padding: 36px;
-    color: #8A928B;
+    color: #8A94A3;
     font-size: 15px;
 }
 
 /* ============================================ */
+/* GUÍA DE PASOS Y BOTÓN REGISTROS              */
+/* ============================================ */
+.titulo-paso { display: inline-flex; align-items: center; gap: 10px; }
+.paso {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--verde);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.titulo-panel {
+    width: 100%;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--texto);
+    flex-shrink: 0;
+}
+
+.resumen-seleccion {
+    width: 100%;
+    font-size: 13px;
+    line-height: 1.35;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--ambar-fondo);
+    color: var(--ambar);
+    flex-shrink: 0;
+}
+.resumen-seleccion.completo { background: var(--verde-suave); color: var(--verde-osc); font-weight: 600; }
+
+.btn-registros {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--borde-fuerte);
+    border-radius: 10px;
+    background: var(--superficie);
+    color: var(--texto);
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+}
+.btn-registros:hover { background: var(--superficie-2); }
+.btn-registros .badge {
+    min-width: 26px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--verde);
+    color: #fff;
+    font-size: 13px;
+    text-align: center;
+}
+
+.modal-transacciones .mallas-tabla-header { padding: 0; border: none; flex-wrap: wrap; }
+.modal-transacciones .mallas-tabla-sub { font-weight: 600; color: var(--texto); }
+
+/* ============================================ */
+/* TALLOS POR MALLA (selección con botones)     */
+/* ============================================ */
+.grid-tallos {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+/* Cada número de tallos se ve y se toca como un elemento de lista */
+.chip-tallo {
+    flex: none;
+    min-height: 46px;
+    padding: 0 14px;
+    text-align: left;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--texto);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+.chip-tallo:hover { background: var(--superficie-2); }
+.chip-tallo:active { background: var(--verde-suave); }
+.chip-tallo.activo {
+    background: var(--verde);
+    color: #fff;
+    font-weight: 600;
+}
+
+.panel-mallas .display-malla { width: 100%; cursor: default; }
+.tecla.retroceso { font-size: 22px; }
+
+/* ============================================ */
 /* RESPONSIVE */
 /* ============================================ */
+/* ---------- Pantallas grandes / medianas (horizontal) ---------- */
 @media (max-width: 1400px) {
-    .main-container { grid-template-columns: 1fr 1fr 1fr 280px; }
-    .mallas-grid { grid-template-columns: 1fr 1fr 1fr 280px; }
+    .main-container, .mallas-grid { grid-template-columns: 1fr 1fr 1fr 280px; }
     .pantalla-numeros { font-size: 52px; height: 86px; }
     .tecla { padding: 18px 0; font-size: 21px; min-height: 56px; }
     .btn-guardar-grande { font-size: 18px; min-height: 64px; }
     .display-valor { font-size: 38px; }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
     .marca-texto { display: none; }
-    .resumen-mallas { margin-left: 0; }
-}
-
-@media (max-width: 1024px) {
-    .main-container { grid-template-columns: 1fr 1fr 1fr 240px; gap: 8px; padding: 8px; }
-    .mallas-container { gap: 8px; padding: 8px; }
-    .mallas-grid { grid-template-columns: 1fr 1fr 1fr 240px; gap: 8px; }
-    .pantalla-numeros { font-size: 46px; height: 76px; padding-right: 14px; }
-    .tecla { padding: 14px 0; font-size: 19px; min-height: 50px; }
-    .icon-btn { font-size: 18px; }
+    .main-container, .mallas-grid { grid-template-columns: 1fr 1fr 1fr 250px; gap: 8px; }
+    .main-container, .mallas-container { padding: 8px; }
     .columna-header { font-size: 12px; padding: 10px 12px; }
     .lista-items li { padding: 10px 12px; font-size: 14px; min-height: 44px; }
-    .btn-guardar-grande { font-size: 16px; min-height: 58px; letter-spacing: 1px; }
-    .header-left input[type="date"] { font-size: 14px; min-width: 150px; }
-    .tab-btn { padding: 10px 16px; }
+    .tecla { padding: 14px 0; font-size: 19px; min-height: 50px; }
+    .pantalla-numeros { font-size: 44px; height: 72px; }
+    .btn-guardar-grande { font-size: 16px; min-height: 56px; letter-spacing: 1px; }
     .display-valor { font-size: 32px; }
-}
-
-@media (max-width: 900px) {
-    .main-container { grid-template-columns: 1fr 1fr 1fr 210px; }
-    .mallas-grid { grid-template-columns: 1fr 1fr 1fr 210px; }
-    .pantalla-numeros { font-size: 40px; height: 66px; }
-    .tecla { padding: 12px 0; font-size: 17px; min-height: 46px; }
-    .teclado-grid { gap: 6px; }
-    .columna-header { font-size: 11px; padding: 9px 10px; }
-    .lista-items li { padding: 9px 10px; font-size: 13px; min-height: 42px; }
-    .lista-items::-webkit-scrollbar { width: 12px; }
-    .btn-guardar-grande { font-size: 15px; min-height: 52px; }
-    .display-valor { font-size: 28px; }
-    .stat { min-width: 80px; }
-    .stat-valor { font-size: 20px; }
-}
-
-@media (max-width: 768px) and (orientation: portrait) {
-    .main-container { grid-template-columns: 1fr 1fr 1fr 190px; font-size: 90%; }
-    .mallas-grid { grid-template-columns: 1fr 1fr 1fr 190px; }
-    .pantalla-numeros { font-size: 34px; height: 58px; }
-    .tecla { padding: 10px 0; font-size: 16px; min-height: 44px; }
-    .columna-header { font-size: 11px; padding: 8px 8px; }
-    .lista-items li { padding: 8px 10px; font-size: 12px; min-height: 40px; }
-    .lista-items::-webkit-scrollbar { width: 10px; }
-    .modal-transacciones { width: 95% !important; }
-    .tabla-transacciones { font-size: 11.5px; }
-    .btn-guardar-grande { font-size: 14px; min-height: 48px; }
+    .tab-btn { padding: 10px 16px; }
 }
 
 @media (min-width: 1800px) {
-    .main-container { grid-template-columns: 1fr 1fr 1fr 350px; }
-    .mallas-grid { grid-template-columns: 1fr 1fr 1fr 350px; }
+    .main-container, .mallas-grid { grid-template-columns: 1fr 1fr 1fr 360px; }
     .pantalla-numeros { font-size: 76px; height: 124px; }
     .tecla { padding: 28px 0; font-size: 28px; min-height: 82px; }
     .lista-items li { padding: 15px 20px; font-size: 17px; min-height: 54px; }
     .btn-guardar-grande { font-size: 24px; min-height: 88px; }
     .display-valor { font-size: 56px; }
+    .columna-header { font-size: 14px; }
 }
 
-/* Tablets de poca altura: compactar el panel de Mallas */
-@media (max-height: 860px) {
-    .mallas-toolbar { padding: 8px 14px; }
-    .campo select, .campo input { height: 42px; }
-    .stat { padding: 4px 12px; }
-    .stat-valor { font-size: 20px; }
-    .display-malla { padding: 6px 12px; }
-    .display-valor { font-size: 30px; }
-    .panel-mallas { padding: 10px; gap: 6px; }
-    .panel-mallas .teclado-grid { grid-auto-rows: minmax(30px, 1fr); gap: 5px; }
+/* Pantallas bajas (laptops, tablets 800px de alto): compactar teclado de Mallas */
+@media (max-height: 820px) and (min-width: 1001px) {
+    .panel-mallas { padding: 12px; gap: 8px; }
+    .panel-mallas .teclado-grid { grid-auto-rows: clamp(48px, 10vh, 80px); gap: 7px; }
     .panel-mallas .tecla { font-size: 19px; }
     .panel-mallas .btn-guardar-grande { min-height: 48px; font-size: 16px; }
-    .mallas-tabla { flex-basis: 32%; }
+    .resumen-seleccion { font-size: 12px; padding: 6px 8px; }
 }
 
-@media (max-width: 600px) {
-    body::before {
-        content: "📱 Por favor, use este sistema en una Tablet o Computadora.";
-        display: flex;
-        position: fixed;
-        inset: 0;
-        background: white;
-        color: var(--texto);
-        align-items: center;
-        justify-content: center;
-        padding: 30px;
-        text-align: center;
-        font-size: 16px;
-        z-index: 9999;
-    }
+/* ---------- Tablets en vertical y pantallas angostas: 2 columnas con scroll ---------- */
+@media (max-width: 1000px), (orientation: portrait) and (max-width: 1300px) {
+    html, body { height: auto; min-height: 100%; overflow-y: auto; overflow-x: hidden; }
+    header { position: sticky; top: 0; }
+    .main-container, .mallas-container { overflow: visible; flex: none; padding: 8px; }
+    .main-container, .mallas-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mallas-grid { flex: none; }
+    .columna { height: 420px; }
+    .panel-teclado { overflow: visible; }
+    .panel-mallas { overflow: visible; }
+    .panel-mallas .teclado-grid { flex: none; grid-auto-rows: 58px; }
+    .panel-mallas .tecla { font-size: 22px; }
+    .pantalla-numeros { font-size: 48px; height: 80px; }
+    .tecla { min-height: 58px; }
+    .modal-transacciones { width: 96% !important; }
+}
+
+/* ---------- Celulares: 1 columna ---------- */
+@media (max-width: 640px) {
+    header { flex-wrap: wrap; padding: 8px 10px; gap: 8px; }
+    .header-left { gap: 6px; width: 100%; }
+    .marca { display: none; }
+    .tabs { order: -1; width: 100%; margin-right: 0; }
+    .tab-btn { flex: 1; }
+    .header-left input[type="date"] { flex: 1; min-width: 0; }
+    .header-right { width: 100%; justify-content: space-between; }
+    .main-container, .mallas-grid { grid-template-columns: 1fr; }
+    .columna { height: 340px; }
+    .columna-dividida { height: 520px; }
+    .lista-items li { font-size: 15px; min-height: 48px; }
+    .modal-content { padding: 16px; max-width: 96%; }
+    .btn-registros .btn-texto { display: none; }
 }
 
 /* ============================================ */
