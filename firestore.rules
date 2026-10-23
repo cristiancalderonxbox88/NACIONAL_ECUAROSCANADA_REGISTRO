@@ -49,14 +49,14 @@ service cloud.firestore {
     }
 
     // Listas (proveedores, variedades, bloques, cosechadores, tallos...):
-    // todos las ven; solo el admin las modifica
+    // todos los usuarios activos las ven y las modifican
     match /{lista}/{id} {
       allow read: if esUsuario()
         && lista in ['proveedores', 'clasificadores', 'variedades', 'plagas',
-                     'estructuras', 'cosechadores', 'tallos', 'meta'];
-      allow write: if esAdmin()
+                     'estructuras', 'cosechadores', 'tallos', 'zonas', 'mesas', 'meta'];
+      allow write: if esUsuario()
         && lista in ['proveedores', 'clasificadores', 'variedades', 'plagas',
-                     'estructuras', 'cosechadores', 'tallos', 'meta'];
+                     'estructuras', 'cosechadores', 'tallos', 'zonas', 'mesas', 'meta'];
     }
   }
 }

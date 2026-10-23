@@ -1,5 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD + MALLAS — Firebase Firestore
+   v4.4: Todos manejan las listas en ⚙️; crear usuarios solo el admin
    v4.3: Usuarios creados desde ⚙️; contraseñas cortas; admin se crea al primer ingreso
    v4.2: Entrada con nombre de usuario; la sesión se cierra al salir de la app
    v4.1: Roles: un administrador y trabajadores
@@ -1051,8 +1052,7 @@ function construirExcelMallas(datos, etiquetaArchivo) {
    MODALES
    ========================================================= */
 window.abrirAdmin = function() {
-  if (!esAdmin()) return mostrarToast("Sin permiso", "Solo el administrador puede modificar las listas.", "error");
-  // El administrador entra directo, sin PIN
+  // Todos los usuarios pueden manejar las listas; la sección Usuarios solo la ve el admin
   document.getElementById("vistaPin").style.display = "none";
   document.getElementById("vistaAdmin").style.display = "";
   document.getElementById("modalAdmin").style.display = "flex";
@@ -1152,7 +1152,6 @@ window.actualizarVistaAdmin = function() {
 };
 
 window.agregarItemAdmin = async function() {
-  if (!esAdmin()) return mostrarToast("Sin permiso", "Solo el administrador puede modificar las listas.", "error");
   const cat = document.getElementById("adminCategoria").value;
   const input = document.getElementById("adminInput");
   let nombre = input.value.trim().toUpperCase();

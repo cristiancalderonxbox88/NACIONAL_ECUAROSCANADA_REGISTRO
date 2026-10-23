@@ -15,7 +15,7 @@
     </script>
     <title>Registro Nacional - Calidad y Mallas</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=4.3">
+    <link rel="stylesheet" href="styles.css?v=4.4">
 </head>
 <body>
 
@@ -32,7 +32,7 @@
             </nav>
 
             <input type="date" id="fecha" value="2026-10-06" aria-label="Fecha">
-            <button class="icon-btn solo-admin" onclick="abrirAdmin()" title="Administrar Listas">⚙️</button>
+            <button class="icon-btn" onclick="abrirAdmin()" title="Administrar Listas">⚙️</button>
         </div>
         <div class="header-right">
             <button class="btn-registros" onclick="abrirRegistros()" title="Ver registros del día">
@@ -283,7 +283,7 @@
                     </div>
                 </div>
 
-                <div class="seccion-usuarios">
+                <div class="seccion-usuarios solo-admin">
                     <h3>👤 Usuarios de la app</h3>
                     <div class="form-usuario">
                         <div class="form-group">
@@ -391,6 +391,6 @@
         </form>
     </div>
 
-    <script type="module" src="app.js?v=4.3"></script>
+    <script type="module" src="app.js?v=4.4"></script>
 </body>
 </html>
