@@ -1,5 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD + MALLAS — Firebase Firestore
+   v4.3: Usuarios creados desde ⚙️; contraseñas cortas; admin se crea al primer ingreso
    v4.2: Entrada con nombre de usuario; la sesión se cierra al salir de la app
    v4.1: Roles: un administrador y trabajadores
    v4.0: Login con correo y contraseña (una cuenta); la sesión queda abierta
@@ -10,10 +11,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+  collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc,
   onSnapshot, writeBatch, serverTimestamp, query, where
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 /* ---------- CONFIGURACIÓN FIREBASE ---------- */
 const firebaseConfig = {
@@ -34,6 +35,12 @@ const PIN_ADMIN = "1234";
    Firebase lo guarda como usuario@DOMINIO_USUARIOS. */
 const DOMINIO_USUARIOS = "ecuaroscanada.app";
 const USUARIOS_ADMIN = ["admin"];
+
+// Firebase pide contraseñas de 6+ caracteres: por dentro se les agrega este final,
+// así se pueden usar contraseñas cortas como 0938 o traba1.
+const SUFIJO_CLAVE = "#wrc";
+function claveInterna(c) { return String(c) + SUFIJO_CLAVE; }
+function correoDe(usuario) { return `${usuario}@${DOMINIO_USUARIOS}`; }
 
 function nombreUsuario(email) {
   return String(email || "").split("@")[0].toLowerCase();
@@ -319,9 +326,25 @@ function init() {
       mostrarLogin();
       return;
     }
+    const admin = esAdmin();
+    if (!admin) {
+      let activo = true;
+      try {
+        const u = await getDoc(doc(db, "usuarios", nombreUsuario(user.email)));
+        activo = u.exists() && u.data().activo !== false;
+      } catch (e) {
+        // Sin permiso = no está en la lista; sin internet = se deja pasar (ya inició sesión)
+        if (String(e.code || "").includes("permission-denied")) activo = false;
+      }
+      if (!activo) {
+        try { await signOut(auth); } catch (e) {}
+        mostrarLogin();
+        $("loginError").textContent = "Este usuario no está activo. Pide acceso al administrador.";
+        return;
+      }
+    }
     ocultarLogin();
     const correo = $("menuCorreo"); if (correo) correo.textContent = nombreUsuario(user.email);
-    const admin = esAdmin();
     document.body.classList.toggle("es-admin", admin);
     const rol = $("menuRol"); if (rol) rol.textContent = admin ? "Administrador" : "Trabajador";
     if (datosIniciados) return;
@@ -333,6 +356,7 @@ function init() {
     CATS.forEach(cargarCatalogo);
     escucharTransacciones(state.fecha);
     escucharMallas(state.fecha);
+    if (admin) escucharUsuarios();
   });
 }
 // Se ejecuta cuando todo el archivo ya cargó (así existen todas las funciones)
@@ -357,10 +381,25 @@ window.iniciarSesion = async function(e) {
   const err = $("loginError"), btn = $("loginBoton");
   err.textContent = "";
   if (!usuario || !clave) { err.textContent = "Escribe el usuario y la contraseña."; return; }
-  const correo = usuario.includes("@") ? usuario : `${usuario}@${DOMINIO_USUARIOS}`;
+  const correo = usuario.includes("@") ? usuario : correoDe(usuario);
   btn.disabled = true; btn.textContent = "Entrando…";
   try {
-    await signInWithEmailAndPassword(auth, correo, clave);
+    try {
+      await signInWithEmailAndPassword(auth, correo, claveInterna(clave));
+    } catch (x) {
+      // Primera vez del administrador: si su cuenta aún no existe, se crea con esta contraseña
+      if (USUARIOS_ADMIN.includes(nombreUsuario(correo)) && String(x.code || "").includes("invalid-credential")) {
+        try {
+          await createUserWithEmailAndPassword(auth, correo, claveInterna(clave));
+          mostrarToast("Cuenta de administrador creada", "Desde ahora entra con esta misma contraseña.", "ok", 5000);
+        } catch (y) {
+          if (String(y.code || "").includes("email-already-in-use")) throw x;
+          throw y;
+        }
+      } else {
+        throw x;
+      }
+    }
     $("loginClave").value = "";
   } catch (x) {
     const c = x.code || "";
@@ -376,6 +415,88 @@ window.iniciarSesion = async function(e) {
     btn.disabled = false; btn.textContent = "Entrar";
   }
 };
+
+/* =========================================================
+   USUARIOS (solo administrador)
+   ========================================================= */
+let usuariosCache = [];
+let appSecundaria = null;
+
+function escucharUsuarios() {
+  onSnapshot(collection(db, "usuarios"),
+    (snap) => {
+      usuariosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => a.id.localeCompare(b.id, "es", { numeric: true }));
+      renderUsuarios();
+    },
+    (err) => console.warn("[WRC] usuarios:", err.code, err.message));
+}
+
+function renderUsuarios() {
+  const ul = $("listaUsuarios"); if (!ul) return;
+  const filas = [`<li class="admin-item"><span class="item-texto"><b>admin</b> <span class="etq-rol admin">Administrador</span></span></li>`];
+  usuariosCache.forEach(u => {
+    const activo = u.activo !== false;
+    filas.push(`<li class="admin-item ${activo ? "" : "inactivo"}">
+      <span class="item-texto"><b>${esc(u.id)}</b> <span class="etq-rol ${activo ? "" : "off"}">${activo ? "Activo" : "Desactivado"}</span></span>
+      <button class="btn-usuario" data-usuario="${esc(u.id)}" data-activar="${activo ? "0" : "1"}">${activo ? "Desactivar" : "Activar"}</button>
+    </li>`);
+  });
+  ul.innerHTML = filas.join("");
+}
+
+window.crearUsuario = async function() {
+  if (!esAdmin()) return;
+  const inNombre = $("nuevoUsuario"), inClave = $("nuevaClave");
+  const nombre = inNombre.value.trim().toLowerCase().replace(/\s+/g, "");
+  const clave = inClave.value;
+  if (!/^[a-z0-9._-]{3,30}$/.test(nombre))
+    return mostrarToast("Nombre inválido", "Usa de 3 a 30 letras o números, sin espacios (ej. trabajador5).", "error");
+  if (USUARIOS_ADMIN.includes(nombre))
+    return mostrarToast("Nombre reservado", "Elige otro nombre de usuario.", "error");
+  if (clave.length < 4)
+    return mostrarToast("Contraseña muy corta", "Debe tener al menos 4 caracteres.", "error");
+
+  const btn = $("btnCrearUsuario"); btn.disabled = true; btn.textContent = "Creando…";
+  try {
+    // Se crea con una segunda conexión para que el administrador no pierda su sesión
+    if (!appSecundaria) appSecundaria = initializeApp(firebaseConfig, "crear-usuarios");
+    const auth2 = getAuth(appSecundaria);
+    let yaExistia = false;
+    try {
+      await createUserWithEmailAndPassword(auth2, correoDe(nombre), claveInterna(clave));
+      await signOut(auth2);
+    } catch (x) {
+      if (String(x.code || "").includes("email-already-in-use")) yaExistia = true;
+      else throw x;
+    }
+    await setDoc(doc(db, "usuarios", nombre), {
+      rol: "trabajador", activo: true, actualizado: serverTimestamp()
+    }, { merge: true });
+    inNombre.value = ""; inClave.value = "";
+    if (yaExistia) {
+      mostrarToast("Usuario activado", `${nombre} ya existía: sigue con su contraseña anterior.`, "warn", 6000);
+    } else {
+      mostrarToast("Usuario creado", `${nombre} ya puede entrar.`, "ok", 3000);
+    }
+  } catch (x) {
+    console.error(x);
+    mostrarToast("No se pudo crear", x.code === "auth/network-request-failed" ? "Se necesita internet." : (x.message || x.code), "error", 5000);
+  } finally {
+    btn.disabled = false; btn.textContent = "➕ Crear usuario";
+  }
+};
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest(".btn-usuario");
+  if (!b || !esAdmin()) return;
+  const nombre = b.dataset.usuario, activar = b.dataset.activar === "1";
+  if (!activar && !confirm(`¿Desactivar a ${nombre}? Ya no podrá entrar a la app. Sus registros se conservan.`)) return;
+  try {
+    await setDoc(doc(db, "usuarios", nombre), { activo: activar, actualizado: serverTimestamp() }, { merge: true });
+    mostrarToast(activar ? "Usuario activado" : "Usuario desactivado", nombre, "ok", 2200);
+  } catch (x) { mostrarToast("Error", x.message, "error"); }
+});
 
 window.alternarClave = function() {
   const i = $("loginClave"); i.type = i.type === "password" ? "text" : "password";

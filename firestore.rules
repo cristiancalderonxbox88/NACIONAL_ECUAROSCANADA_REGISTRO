@@ -3,34 +3,39 @@ rules_version = '2';
 // ==========================================================================
 //  REGLAS DE SEGURIDAD - Registro Nacional (Calidad y Mallas)
 //
-//  Usuarios de la app: admin, trabajador1, trabajador2, trabajador3, trabajador4
-//  En Firebase (Authentication > Users) se crean como:
-//     admin@ecuaroscanada.app, trabajador1@ecuaroscanada.app, etc.
-//  Si agregas o cambias un usuario, actualiza también esta lista.
+//  - "admin" puede todo.
+//  - Los trabajadores los crea el admin desde la app (⚙️ > Usuarios).
+//    Solo entran los que estén ACTIVOS en esa lista.
+//  No hay que cambiar nada en este archivo al agregar o quitar trabajadores.
 // ==========================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function correo() {
-      return request.auth.token.email.lower();
+    function cuentaApp() {
+      return request.auth != null
+        && request.auth.token.email.lower().matches('.*@ecuaroscanada[.]app');
     }
 
-    // Administrador: puede todo
+    function nombre() {
+      return request.auth.token.email.lower().split('@')[0];
+    }
+
     function esAdmin() {
-      return request.auth != null && correo() in [
-        'admin@ecuaroscanada.app'
-      ];
+      return cuentaApp() && nombre() == 'admin';
     }
 
-    // Todos los que pueden usar la app (admin + trabajadores)
     function esUsuario() {
-      return request.auth != null && correo() in [
-        'admin@ecuaroscanada.app',
-        'trabajador1@ecuaroscanada.app',
-        'trabajador2@ecuaroscanada.app',
-        'trabajador3@ecuaroscanada.app',
-        'trabajador4@ecuaroscanada.app'
-      ];
+      return esAdmin() || (
+        cuentaApp()
+        && exists(/databases/$(database)/documents/usuarios/$(nombre()))
+        && get(/databases/$(database)/documents/usuarios/$(nombre())).data.activo == true
+      );
+    }
+
+    // Lista de usuarios: solo el admin la maneja; cada uno puede ver su propio estado
+    match /usuarios/{id} {
+      allow read: if esAdmin() || (cuentaApp() && nombre() == id);
+      allow write: if esAdmin();
     }
 
     // Registros: todos ven y registran; solo el admin corrige o borra

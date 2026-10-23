@@ -1172,3 +1172,28 @@ body:not(.es-admin) .solo-admin { display: none !important; }
     background: var(--superficie-2); color: var(--texto-2);
 }
 body.es-admin .menu-rol { background: var(--verde-claro); color: var(--verde-osc); }
+
+/* Usuarios (en ⚙️ Administración) */
+.seccion-usuarios {
+    margin-top: 8px; padding-top: 16px;
+    border-top: 1px solid var(--borde);
+    display: flex; flex-direction: column; gap: 10px;
+}
+.seccion-usuarios h3 { font-size: 16px; }
+.form-usuario { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.etq-rol {
+    display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; background: var(--verde-suave); color: var(--verde-osc);
+}
+.etq-rol.admin { background: var(--verde); color: #fff; }
+.etq-rol.off { background: var(--superficie-2); color: var(--texto-2); }
+.admin-item.inactivo .item-texto b { color: var(--texto-2); text-decoration: line-through; }
+.btn-usuario {
+    min-height: 36px; padding: 0 12px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--borde-fuerte); background: var(--superficie);
+    font-size: 13px; font-weight: 700; color: var(--texto); flex-shrink: 0;
+}
+.btn-usuario[data-activar="0"] { color: var(--rojo); }
+.btn-usuario[data-activar="1"] { color: var(--verde-osc); }
+.form-usuario .form-group { min-width: 0; }
+.form-usuario input { width: 100%; min-width: 0; }
