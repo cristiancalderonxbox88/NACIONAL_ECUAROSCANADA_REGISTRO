@@ -1162,3 +1162,13 @@ html.modo-celular .panel-mallas { justify-content: flex-start; }
     background: var(--superficie); color: var(--rojo); font-size: 14px; font-weight: 700; cursor: pointer;
 }
 .menu-item:hover { background: var(--rojo-fondo); }
+
+/* Roles: lo marcado solo-admin se oculta a los trabajadores */
+body:not(.es-admin) .solo-admin { display: none !important; }
+.menu-rol {
+    display: inline-block; margin: -4px 0 10px;
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+    background: var(--superficie-2); color: var(--texto-2);
+}
+body.es-admin .menu-rol { background: var(--verde-claro); color: var(--verde-osc); }

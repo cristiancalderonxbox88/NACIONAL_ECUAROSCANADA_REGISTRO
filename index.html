@@ -15,7 +15,7 @@
     </script>
     <title>Registro Nacional - Calidad y Mallas</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=4.0">
+    <link rel="stylesheet" href="styles.css?v=4.2">
 </head>
 <body>
 
@@ -32,7 +32,7 @@
             </nav>
 
             <input type="date" id="fecha" value="2026-10-06" aria-label="Fecha">
-            <button class="icon-btn" onclick="abrirAdmin()" title="Administrar Listas">⚙️</button>
+            <button class="icon-btn solo-admin" onclick="abrirAdmin()" title="Administrar Listas">⚙️</button>
         </div>
         <div class="header-right">
             <button class="btn-registros" onclick="abrirRegistros()" title="Ver registros del día">
@@ -44,8 +44,9 @@
             <div class="menu-contenedor">
                 <button class="icon-btn" onclick="alternarMenu(event)" aria-label="Menú">⋮</button>
                 <div class="menu-usuario" id="menuUsuario">
-                    <div class="menu-correo-etiqueta">Sesión iniciada</div>
+                    <div class="menu-correo-etiqueta">Usuario</div>
                     <div class="menu-correo" id="menuCorreo"></div>
+                    <div class="menu-rol" id="menuRol"></div>
                     <button class="menu-item" onclick="cerrarSesion()">Cerrar sesión</button>
                 </div>
             </div>
@@ -359,8 +360,8 @@
             <div class="login-logo">W</div>
             <h1>Registro Nacional</h1>
             <p class="login-sub">Calidad y Mallas</p>
-            <label for="loginCorreo">Correo</label>
-            <input id="loginCorreo" type="email" autocomplete="username" inputmode="email" placeholder="correo@ejemplo.com">
+            <label for="loginCorreo">Usuario</label>
+            <input id="loginCorreo" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="trabajador1">
             <label for="loginClave">Contraseña</label>
             <div class="login-clave">
                 <input id="loginClave" type="password" autocomplete="current-password" placeholder="••••••••">
@@ -368,10 +369,10 @@
             </div>
             <p class="login-error" id="loginError" role="alert"></p>
             <button type="submit" class="login-boton" id="loginBoton">Entrar</button>
-            <p class="login-nota">La sesión queda abierta en este equipo.</p>
+            <p class="login-nota">Al cerrar la app tendrás que volver a entrar.</p>
         </form>
     </div>
 
-    <script type="module" src="app.js?v=4.0"></script>
+    <script type="module" src="app.js?v=4.2"></script>
 </body>
 </html>

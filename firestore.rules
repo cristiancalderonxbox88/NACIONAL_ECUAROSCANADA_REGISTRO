@@ -1,13 +1,57 @@
 rules_version = '2';
 
-// Solo la cuenta autorizada puede leer y guardar datos.
-// IMPORTANTE: cambia TU_CORREO@ejemplo.com por el correo de la cuenta que creaste
-// en Firebase (Authentication > Users), escrito exactamente igual.
+// ==========================================================================
+//  REGLAS DE SEGURIDAD - Registro Nacional (Calidad y Mallas)
+//
+//  Usuarios de la app: admin, trabajador1, trabajador2, trabajador3, trabajador4
+//  En Firebase (Authentication > Users) se crean como:
+//     admin@ecuaroscanada.app, trabajador1@ecuaroscanada.app, etc.
+//  Si agregas o cambias un usuario, actualiza también esta lista.
+// ==========================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null
-                         && request.auth.token.email == 'TU_CORREO@ejemplo.com';
+
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+
+    // Administrador: puede todo
+    function esAdmin() {
+      return request.auth != null && correo() in [
+        'admin@ecuaroscanada.app'
+      ];
+    }
+
+    // Todos los que pueden usar la app (admin + trabajadores)
+    function esUsuario() {
+      return request.auth != null && correo() in [
+        'admin@ecuaroscanada.app',
+        'trabajador1@ecuaroscanada.app',
+        'trabajador2@ecuaroscanada.app',
+        'trabajador3@ecuaroscanada.app',
+        'trabajador4@ecuaroscanada.app'
+      ];
+    }
+
+    // Registros: todos ven y registran; solo el admin corrige o borra
+    match /transacciones/{id} {
+      allow read, create: if esUsuario();
+      allow update, delete: if esAdmin();
+    }
+    match /mallas/{id} {
+      allow read, create: if esUsuario();
+      allow update, delete: if esAdmin();
+    }
+
+    // Listas (proveedores, variedades, bloques, cosechadores, tallos...):
+    // todos las ven; solo el admin las modifica
+    match /{lista}/{id} {
+      allow read: if esUsuario()
+        && lista in ['proveedores', 'clasificadores', 'variedades', 'plagas',
+                     'estructuras', 'cosechadores', 'tallos', 'meta'];
+      allow write: if esAdmin()
+        && lista in ['proveedores', 'clasificadores', 'variedades', 'plagas',
+                     'estructuras', 'cosechadores', 'tallos', 'meta'];
     }
   }
 }

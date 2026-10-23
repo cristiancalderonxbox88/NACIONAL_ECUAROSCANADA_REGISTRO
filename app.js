@@ -1,5 +1,7 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD + MALLAS — Firebase Firestore
+   v4.2: Entrada con nombre de usuario; la sesión se cierra al salir de la app
+   v4.1: Roles: un administrador y trabajadores
    v4.0: Login con correo y contraseña (una cuenta); la sesión queda abierta
    v3.2: Pestaña Mallas (colección "mallas", catálogos estructuras/cosechadores)
    v3.1: Carga robusta de catálogos (getDocs + onSnapshot)
@@ -11,7 +13,7 @@ import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   onSnapshot, writeBatch, serverTimestamp, query, where
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 /* ---------- CONFIGURACIÓN FIREBASE ---------- */
 const firebaseConfig = {
@@ -24,6 +26,22 @@ const firebaseConfig = {
 };
 
 const PIN_ADMIN = "1234";
+
+/* ---------- USUARIOS ----------
+   El ADMIN puede todo: ⚙️ Administración, editar y borrar registros.
+   Los TRABAJADORES solo registran y ven (no ven ⚙️ ni editar/borrar).
+   Se entra con un nombre de usuario (admin, trabajador1...). Por dentro,
+   Firebase lo guarda como usuario@DOMINIO_USUARIOS. */
+const DOMINIO_USUARIOS = "ecuaroscanada.app";
+const USUARIOS_ADMIN = ["admin"];
+
+function nombreUsuario(email) {
+  return String(email || "").split("@")[0].toLowerCase();
+}
+
+function esAdmin() {
+  return USUARIOS_ADMIN.includes(nombreUsuario(auth.currentUser?.email));
+}
 
 /* ---------- CATÁLOGOS SEMILLA ---------- */
 const DEFAULT_CATALOGOS = {
@@ -292,7 +310,9 @@ function init() {
   inyectarBotonRango();
   renderTodo();
 
-  // La sesión queda guardada en el equipo: solo se pide la primera vez
+  // La sesión dura mientras la app esté abierta: al cerrarla hay que volver a entrar
+  setPersistence(auth, browserSessionPersistence).catch(e => console.warn("[WRC] Persistencia:", e));
+
   onAuthStateChanged(auth, async (user) => {
     if (!user || user.isAnonymous) {
       if (user && user.isAnonymous) { try { await signOut(auth); } catch(e) {} }
@@ -300,7 +320,10 @@ function init() {
       return;
     }
     ocultarLogin();
-    const correo = $("menuCorreo"); if (correo) correo.textContent = user.email || "";
+    const correo = $("menuCorreo"); if (correo) correo.textContent = nombreUsuario(user.email);
+    const admin = esAdmin();
+    document.body.classList.toggle("es-admin", admin);
+    const rol = $("menuRol"); if (rol) rol.textContent = admin ? "Administrador" : "Trabajador";
     if (datosIniciados) return;
     datosIniciados = true;
 
@@ -329,11 +352,12 @@ function ocultarLogin() {
 
 window.iniciarSesion = async function(e) {
   if (e) e.preventDefault();
-  const correo = $("loginCorreo").value.trim();
+  const usuario = $("loginCorreo").value.trim().toLowerCase().replace(/\s+/g, "");
   const clave = $("loginClave").value;
   const err = $("loginError"), btn = $("loginBoton");
   err.textContent = "";
-  if (!correo || !clave) { err.textContent = "Escribe el correo y la contraseña."; return; }
+  if (!usuario || !clave) { err.textContent = "Escribe el usuario y la contraseña."; return; }
+  const correo = usuario.includes("@") ? usuario : `${usuario}@${DOMINIO_USUARIOS}`;
   btn.disabled = true; btn.textContent = "Entrando…";
   try {
     await signInWithEmailAndPassword(auth, correo, clave);
@@ -342,9 +366,9 @@ window.iniciarSesion = async function(e) {
     const c = x.code || "";
     err.textContent =
       (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") || c.includes("invalid-email"))
-        ? "Correo o contraseña incorrectos."
+        ? "Usuario o contraseña incorrectos."
       : c.includes("network-request-failed")
-        ? "Sin internet. La primera vez se necesita conexión para entrar."
+        ? "Sin internet. Para entrar se necesita conexión."
       : c.includes("too-many-requests")
         ? "Demasiados intentos. Espera unos minutos y vuelve a probar."
       : "No se pudo entrar: " + (x.message || c);
@@ -368,13 +392,13 @@ document.addEventListener("click", (e) => {
 });
 
 window.cerrarSesion = async function() {
-  if (!confirm("¿Cerrar sesión en este equipo? Para volver a entrar necesitarás el correo y la contraseña.")) return;
+  if (!confirm("¿Cerrar sesión? Para volver a entrar necesitarás tu usuario y contraseña.")) return;
   try { await signOut(auth); } catch(e) {}
   location.reload();
 };
 
 function usuarioActual() {
-  return auth.currentUser?.email || localStorage.getItem("wrc_usuario") || "TABLET";
+  return nombreUsuario(auth.currentUser?.email) || "TABLET";
 }
 
 /* =========================================================
@@ -582,7 +606,7 @@ function renderMallas() {
         <td>${esc(r.estructura)}</td>
         <td>${esc(r.cosechador)}</td>
         <td class="prov" title="${esc(r.proveedor)}">${esc(r.proveedor)}</td>
-        <td><button class="btn-accion btn-eliminar" data-accion="del-malla" data-id="${r.id}" title="Eliminar">🗑️</button></td>
+        <td><button class="btn-accion btn-eliminar solo-admin" data-accion="del-malla" data-id="${r.id}" title="Eliminar">🗑️</button></td>
       </tr>`;
   }).join("");
 }
@@ -652,8 +676,8 @@ function renderTransacciones() {
         <td>${esc(t.plaga)}</td>
         <td>${esc(t.tallos)}</td>
         <td>
-          <button class="btn-accion btn-editar"   data-accion="edit" data-id="${t.id}">✏️</button>
-          <button class="btn-accion btn-eliminar" data-accion="del"  data-id="${t.id}">🗑️</button>
+          <button class="btn-accion btn-editar solo-admin"   data-accion="edit" data-id="${t.id}">✏️</button>
+          <button class="btn-accion btn-eliminar solo-admin" data-accion="del"  data-id="${t.id}">🗑️</button>
         </td>`;
     }
     tbody.appendChild(tr);
@@ -906,6 +930,15 @@ function construirExcelMallas(datos, etiquetaArchivo) {
    MODALES
    ========================================================= */
 window.abrirAdmin = function() {
+  if (!esAdmin()) return mostrarToast("Sin permiso", "Solo el administrador puede modificar las listas.", "error");
+  // El administrador entra directo, sin PIN
+  document.getElementById("vistaPin").style.display = "none";
+  document.getElementById("vistaAdmin").style.display = "";
+  document.getElementById("modalAdmin").style.display = "flex";
+  window.actualizarVistaAdmin();
+};
+
+window.abrirAdminConPin = function() {
   state.pin = "";
   actualizarPinDots();
   document.getElementById("pinError").textContent = "";
@@ -998,6 +1031,7 @@ window.actualizarVistaAdmin = function() {
 };
 
 window.agregarItemAdmin = async function() {
+  if (!esAdmin()) return mostrarToast("Sin permiso", "Solo el administrador puede modificar las listas.", "error");
   const cat = document.getElementById("adminCategoria").value;
   const input = document.getElementById("adminInput");
   let nombre = input.value.trim().toUpperCase();
@@ -1030,6 +1064,10 @@ document.addEventListener("click", async (e) => {
   if (!btn) return;
   const accion = btn.dataset.accion;
   const id = btn.dataset.id;
+
+  if (["del-malla","edit","del","save"].includes(accion) && !esAdmin()) {
+    return mostrarToast("Sin permiso", "Solo el administrador puede editar o borrar registros.", "error");
+  }
 
   if (accion === "del-malla") {
     if (!confirm("¿Eliminar este registro de malla? No se puede deshacer.")) return;
