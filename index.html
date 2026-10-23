@@ -15,7 +15,7 @@
     </script>
     <title>Registro Nacional - Calidad y Mallas</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="styles.css?v=3.9">
+    <link rel="stylesheet" href="styles.css?v=4.0">
 </head>
 <body>
 
@@ -41,7 +41,14 @@
                 <span class="badge" id="badgeRegistros">0</span>
             </button>
             <div id="sync-indicador" class="sync-indicador online">🟢 En línea</div>
-            <button class="icon-btn">⋮</button>
+            <div class="menu-contenedor">
+                <button class="icon-btn" onclick="alternarMenu(event)" aria-label="Menú">⋮</button>
+                <div class="menu-usuario" id="menuUsuario">
+                    <div class="menu-correo-etiqueta">Sesión iniciada</div>
+                    <div class="menu-correo" id="menuCorreo"></div>
+                    <button class="menu-item" onclick="cerrarSesion()">Cerrar sesión</button>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -346,6 +353,25 @@
         </div>
     </div>
 
-    <script type="module" src="app.js?v=3.9"></script>
+    <!-- =================== LOGIN =================== -->
+    <div id="pantallaLogin" class="pantalla-login">
+        <form class="login-caja" onsubmit="iniciarSesion(event)">
+            <div class="login-logo">W</div>
+            <h1>Registro Nacional</h1>
+            <p class="login-sub">Calidad y Mallas</p>
+            <label for="loginCorreo">Correo</label>
+            <input id="loginCorreo" type="email" autocomplete="username" inputmode="email" placeholder="correo@ejemplo.com">
+            <label for="loginClave">Contraseña</label>
+            <div class="login-clave">
+                <input id="loginClave" type="password" autocomplete="current-password" placeholder="••••••••">
+                <button type="button" class="login-ver" onclick="alternarClave()" aria-label="Mostrar u ocultar contraseña">👁</button>
+            </div>
+            <p class="login-error" id="loginError" role="alert"></p>
+            <button type="submit" class="login-boton" id="loginBoton">Entrar</button>
+            <p class="login-nota">La sesión queda abierta en este equipo.</p>
+        </form>
+    </div>
+
+    <script type="module" src="app.js?v=4.0"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD + MALLAS — Firebase Firestore
+   v4.0: Login con correo y contraseña (una cuenta); la sesión queda abierta
    v3.2: Pestaña Mallas (colección "mallas", catálogos estructuras/cosechadores)
    v3.1: Carga robusta de catálogos (getDocs + onSnapshot)
    ========================================================================= */
@@ -10,7 +11,7 @@ import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
   onSnapshot, writeBatch, serverTimestamp, query, where
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 /* ---------- CONFIGURACIÓN FIREBASE ---------- */
 const firebaseConfig = {
@@ -260,26 +261,16 @@ function aplicarCatalogo(nombre, snap) {
 /* =========================================================
    ARRANQUE
    ========================================================= */
-(async function init() {
-  try { await signInAnonymously(auth); console.log("[WRC] Auth OK"); }
-  catch(e){ console.warn("[WRC] Auth:", e.code || e.message); }
+let datosIniciados = false;
 
-  try { await sembrarSiHaceFalta(); }
-  catch(e){ console.error("[WRC] Seed:", e); }
-
-  // Cargar catálogos (getDocs + onSnapshot)
-  CATS.forEach(cargarCatalogo);
-
-  // Transacciones + Mallas
-  escucharTransacciones(state.fecha);
-  escucharMallas(state.fecha);
-
+function init() {
   const f = $("fecha");
   if (f) {
     f.value = state.fecha;
     f.addEventListener("change", (e) => {
       state.fecha = e.target.value || new Date().toISOString().slice(0,10);
       state.editandoId = null;
+      if (!datosIniciados) return;
       escucharTransacciones(state.fecha);
       escucharMallas(state.fecha);
     });
@@ -300,7 +291,91 @@ function aplicarCatalogo(nombre, snap) {
 
   inyectarBotonRango();
   renderTodo();
-})();
+
+  // La sesión queda guardada en el equipo: solo se pide la primera vez
+  onAuthStateChanged(auth, async (user) => {
+    if (!user || user.isAnonymous) {
+      if (user && user.isAnonymous) { try { await signOut(auth); } catch(e) {} }
+      mostrarLogin();
+      return;
+    }
+    ocultarLogin();
+    const correo = $("menuCorreo"); if (correo) correo.textContent = user.email || "";
+    if (datosIniciados) return;
+    datosIniciados = true;
+
+    try { await sembrarSiHaceFalta(); }
+    catch(e){ console.error("[WRC] Seed:", e); }
+
+    CATS.forEach(cargarCatalogo);
+    escucharTransacciones(state.fecha);
+    escucharMallas(state.fecha);
+  });
+}
+// Se ejecuta cuando todo el archivo ya cargó (así existen todas las funciones)
+queueMicrotask(init);
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+function mostrarLogin() {
+  const l = $("pantallaLogin"); if (!l) return;
+  l.style.display = "flex";
+  setTimeout(() => $("loginCorreo")?.focus(), 50);
+}
+function ocultarLogin() {
+  const l = $("pantallaLogin"); if (l) l.style.display = "none";
+}
+
+window.iniciarSesion = async function(e) {
+  if (e) e.preventDefault();
+  const correo = $("loginCorreo").value.trim();
+  const clave = $("loginClave").value;
+  const err = $("loginError"), btn = $("loginBoton");
+  err.textContent = "";
+  if (!correo || !clave) { err.textContent = "Escribe el correo y la contraseña."; return; }
+  btn.disabled = true; btn.textContent = "Entrando…";
+  try {
+    await signInWithEmailAndPassword(auth, correo, clave);
+    $("loginClave").value = "";
+  } catch (x) {
+    const c = x.code || "";
+    err.textContent =
+      (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") || c.includes("invalid-email"))
+        ? "Correo o contraseña incorrectos."
+      : c.includes("network-request-failed")
+        ? "Sin internet. La primera vez se necesita conexión para entrar."
+      : c.includes("too-many-requests")
+        ? "Demasiados intentos. Espera unos minutos y vuelve a probar."
+      : "No se pudo entrar: " + (x.message || c);
+  } finally {
+    btn.disabled = false; btn.textContent = "Entrar";
+  }
+};
+
+window.alternarClave = function() {
+  const i = $("loginClave"); i.type = i.type === "password" ? "text" : "password";
+};
+
+window.alternarMenu = function(ev) {
+  if (ev) ev.stopPropagation();
+  const m = $("menuUsuario"); if (!m) return;
+  m.style.display = m.style.display === "block" ? "none" : "block";
+};
+document.addEventListener("click", (e) => {
+  const m = $("menuUsuario");
+  if (m && m.style.display === "block" && !e.target.closest("#menuUsuario")) m.style.display = "none";
+});
+
+window.cerrarSesion = async function() {
+  if (!confirm("¿Cerrar sesión en este equipo? Para volver a entrar necesitarás el correo y la contraseña.")) return;
+  try { await signOut(auth); } catch(e) {}
+  location.reload();
+};
+
+function usuarioActual() {
+  return auth.currentUser?.email || localStorage.getItem("wrc_usuario") || "TABLET";
+}
 
 /* =========================================================
    SEMILLA (auto-repara colecciones vacías)
@@ -606,7 +681,7 @@ window.guardarRegistro = async function() {
       variedad:     state.variedad,
       plaga:        state.plaga,
       tallos:       cant,
-      usuario:      localStorage.getItem("wrc_usuario") || "TABLET",
+      usuario:      usuarioActual(),
       creado:       serverTimestamp(),
       actualizado:  serverTimestamp()
     });
@@ -751,7 +826,7 @@ window.guardarMalla = async function() {
       cantidad,
       tallos,
       totalTallos: cantidad * tallos,
-      usuario:     localStorage.getItem("wrc_usuario") || "TABLET",
+      usuario:     usuarioActual(),
       creadoLocal: ahora.getTime(),
       creado:      serverTimestamp()
     });
