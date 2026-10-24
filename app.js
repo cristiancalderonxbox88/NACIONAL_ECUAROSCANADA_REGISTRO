@@ -1,5 +1,6 @@
 /* =========================================================================
    WRC · REGISTRO NACIONAL CALIDAD + MALLAS — Firebase Firestore
+   v4.6: Fecha en hora local (antes desde las 19:00 salía la de mañana)
    v4.4: Todos manejan las listas en ⚙️; crear usuarios solo el admin
    v4.3: Usuarios creados desde ⚙️; contraseñas cortas; admin se crea al primer ingreso
    v4.2: Entrada con nombre de usuario; la sesión se cierra al salir de la app
@@ -121,9 +122,17 @@ const db = initializeFirestore(app, {
 });
 const auth = getAuth(app);
 
+/* ---------- FECHA LOCAL ----------
+   Usa la hora del equipo (Ecuador), no la hora universal (UTC).
+   Con UTC, desde las 19:00 la app mostraba la fecha del día siguiente. */
+function fechaLocal(d = new Date()) {
+  const dos = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+}
+
 /* ---------- ESTADO ---------- */
 const state = {
-  fecha: new Date().toISOString().slice(0,10),
+  fecha: fechaLocal(),
   proveedor: "",
   clasificador: "", variedad: "", plaga: "",
   cantidad: "",
@@ -294,7 +303,7 @@ function init() {
   if (f) {
     f.value = state.fecha;
     f.addEventListener("change", (e) => {
-      state.fecha = e.target.value || new Date().toISOString().slice(0,10);
+      state.fecha = e.target.value || fechaLocal();
       state.editandoId = null;
       if (!datosIniciados) return;
       escucharTransacciones(state.fecha);
@@ -1378,8 +1387,8 @@ function abrirModalRango() {
   inyectarEstilosRango();
   if (document.getElementById("rango-overlay")) return;
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const hace7 = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const hoy = fechaLocal();
+  const hace7 = fechaLocal(new Date(Date.now() - 6 * 86400000));
 
   const overlay = document.createElement("div");
   overlay.id = "rango-overlay";
