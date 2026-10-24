@@ -2,19 +2,25 @@
 /* PALETA                                       */
 /* ============================================ */
 :root {
-    /* Tema azul (los nombres --verde* se mantienen: son el color principal) */
-    --verde: #1F5FAD;
-    --verde-osc: #143F75;
-    --verde-claro: #E2ECF8;
-    --verde-suave: #F0F5FC;
-    --verde-hover: #2A6FC2;
-    --fondo: #EEF2F7;
+    /* Tema azul intenso con dorado (los nombres --verde* se mantienen: son el color principal) */
+    --verde: #0B4FB3;
+    --verde-osc: #06357D;
+    --verde-claro: #DCE8FB;
+    --verde-suave: #EEF4FD;
+    --verde-hover: #1260CF;
+    --fondo: #EDF1F7;
     --superficie: #FFFFFF;
-    --superficie-2: #F6F8FB;
-    --borde: #DDE3EC;
-    --borde-fuerte: #CBD3DF;
-    --texto: #18202B;
-    --texto-2: #566173;
+    --superficie-2: #F5F8FC;
+    --borde: #D9E1EC;
+    --borde-fuerte: #C6D1E0;
+    --texto: #0F1B2D;
+    --texto-2: #4E5B70;
+    --amarillo: #FFC20E;
+    --deg-azul: linear-gradient(135deg, #041F4E 0%, #0B4FB3 55%, #2F86E8 100%);
+    --deg-boton: linear-gradient(180deg, #2C7BE5 0%, #0B4FB3 60%, #083F94 100%);
+    --deg-sel: linear-gradient(90deg, #0B4FB3 0%, #2C7BE5 100%);
+    --deg-oro: linear-gradient(90deg, #FFB000 0%, #FFD54A 50%, #FFB000 100%);
+    --deg-oro-boton: linear-gradient(180deg, #FFE070 0%, #FFC20E 55%, #F2A900 100%);
     --ambar: #8A4B0F;
     --ambar-fondo: #FFF0DC;
     --rojo: #B3261E;
@@ -1197,3 +1203,69 @@ body.es-admin .menu-rol { background: var(--verde-claro); color: var(--verde-osc
 .btn-usuario[data-activar="1"] { color: var(--verde-osc); }
 .form-usuario .form-group { min-width: 0; }
 .form-usuario input { width: 100%; min-width: 0; }
+
+
+/* ============================================ */
+/* ESTILO G1: cabecera en degradado + franja dorada */
+/* ============================================ */
+header {
+    background: var(--deg-azul);
+    border-bottom: 5px solid;
+    border-image: var(--deg-oro) 1;
+}
+.marca { border-right-color: rgba(255, 255, 255, 0.25); }
+.marca-logo, .login-logo {
+    background: var(--deg-oro-boton);
+    color: #06357D;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+}
+.login-logo { font-size: 20px; }
+.marca-texto { color: #fff; }
+header .tabs { background: rgba(255, 255, 255, 0.14); }
+header .tab-btn { color: rgba(255, 255, 255, 0.85); }
+header .tab-btn:hover { color: #fff; }
+header .tab-btn.activo { background: #fff; color: #06357D; }
+header .header-left input[type="date"] {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #fff;
+    color-scheme: dark;
+}
+header .icon-btn { color: #fff; }
+header .icon-btn:hover { background: rgba(255, 255, 255, 0.14); }
+header .btn-registros {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #fff;
+}
+header .btn-registros:hover { background: rgba(255, 255, 255, 0.2); }
+header .btn-registros .badge { background: var(--deg-oro-boton); color: #06357D; }
+header .sync-indicador { background: rgba(255, 255, 255, 0.16); color: #fff; }
+header .sync-indicador.offline { background: var(--rojo-fondo); color: var(--rojo); }
+header .sync-indicador.sincronizando { background: var(--ambar-fondo); color: var(--ambar); }
+
+.lista-items li.active,
+.chip-tallo.activo,
+.tab-btn.activo-azul { background: var(--deg-sel); }
+.btn-guardar-grande {
+    background: var(--deg-boton);
+    box-shadow: 0 6px 16px rgba(11, 79, 179, 0.35);
+}
+.btn-guardar-grande:hover { background: var(--deg-boton); filter: brightness(1.08); }
+.btn-guardar-grande:active { box-shadow: 0 2px 6px rgba(11, 79, 179, 0.35); }
+.login-boton { background: var(--deg-boton); }
+.login-boton:hover { background: var(--deg-boton); filter: brightness(1.08); }
+
+/* Inicio de sesión: fondo en degradado y firma en la esquina */
+.pantalla-login { background: var(--deg-azul); }
+.login-caja { border: none; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); border-top: 5px solid var(--amarillo); }
+.login-firma {
+    position: fixed;
+    right: 14px;
+    bottom: 10px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 0.02em;
+}
